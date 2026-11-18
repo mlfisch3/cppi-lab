@@ -28,13 +28,18 @@ assembled from the application's own windows, read back from the X server
 one by one and placed at their screen positions (see ``x11_capture.py``).
 
 Exit status 0 means every step was verified; any failed check is printed and
-makes the status 1.  The script needs the ``xcb`` platform (see the README)
-and ``xdotool``.
+makes the status 1.  The X pointer is shared with the real mouse, so keep
+your hands off it while the tour runs.  A drag during which a pointer event
+arrived from elsewhere (a hand, or the desktop reporting where the real
+pointer rests when a window moves under it) is detected and repeated, and the
+windows are moved away from that spot.  The script needs the ``xcb`` platform
+(see the README), ``xdotool`` and ImageMagick's ``import``.
 """
 
 from __future__ import annotations
 
 import argparse
+import math
 import shutil
 import subprocess
 import sys
@@ -45,6 +50,21 @@ from typing import Any
 #: Pixels the cursor travels per injected motion event, and the pause after each.
 DRAG_STEP_PX = 24
 DRAG_STEP_SECONDS = 0.012
+#: How often a gesture is attempted when the real mouse moved the pointer during it.
+TRIES = 4
+#: A pointer event further than this from the injected path came from somewhere else.
+POINTER_TOLERANCE_PX = 48
+
+
+def off_path(point: tuple[int, int], start: tuple[int, int], end: tuple[int, int]) -> float:
+    """Distance in pixels from ``point`` to the straight path from ``start`` to ``end``."""
+    px, py = point
+    ax, ay = start
+    bx, by = end
+    dx, dy = bx - ax, by - ay
+    length = dx * dx + dy * dy
+    along = 0.0 if length == 0 else max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / length))
+    return math.hypot(px - (ax + along * dx), py - (ay + along * dy))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -65,7 +85,8 @@ def main(argv: list[str] | None = None) -> int:
     configure_environment()
     import pyqtgraph as pg
     import PySide6QtAds as ads
-    from PySide6 import QtCore, QtWidgets
+    from PySide6 import QtCore, QtGui, QtWidgets
+    from shiboken6 import isValid
 
     set_application_attributes()
     from cppi_lab.ui import theme
@@ -136,9 +157,67 @@ def main(argv: list[str] | None = None) -> int:
 
     position = [0, 0]
 
+    class PointerWatch(QtCore.QObject):
+        """Notices when the pointer is not where this script put it.
+
+        The X pointer is shared with the real mouse.  Whenever the desktop
+        tells the X server where the real pointer is - a hand moved it, or a
+        window appeared or moved underneath it - the server's pointer jumps
+        there until the next injected motion, and a docking system that asks
+        the server for the pointer position in that moment moves the dragged
+        window to the wrong place.  Such a drag says nothing about the
+        application, so it is detected here and repeated.
+        """
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.path: tuple[tuple[int, int], tuple[int, int]] = ((0, 0), (0, 0))
+            self.foreign: tuple[int, int] | None = None
+            self.watching = False
+            self._pressed: QtWidgets.QWidget | None = None
+
+        def start(self, pressed: QtWidgets.QWidget | None) -> None:
+            """Begin a gesture on ``pressed``, the widget that will receive the drag."""
+            self.foreign = None
+            self.watching = True
+            self._pressed = pressed
+            if pressed is not None:
+                # While a button is held every mouse event goes to the widget it
+                # was pressed on, so that is the only one that has to be watched.
+                pressed.installEventFilter(self)
+
+        def stop(self) -> bool:
+            """End a gesture; ``True`` if every pointer event came from this script."""
+            self.watching = False
+            if self._pressed is not None and isValid(self._pressed):
+                self._pressed.removeEventFilter(self)  # a drop may have destroyed it
+            self._pressed = None
+            return self.foreign is None
+
+        def eventFilter(  # noqa: N802 (Qt virtual)
+            self, watched: QtCore.QObject, event: QtCore.QEvent
+        ) -> bool:
+            if (
+                self.watching
+                and self.foreign is None
+                and isinstance(event, QtGui.QMouseEvent)
+                and event.spontaneous()
+            ):
+                # Two things can be off: the position the event carries, and the
+                # position the X server reports when asked right now - which is
+                # what the docking system asks for while it moves the window.
+                for at in (event.globalPosition().toPoint(), QtGui.QCursor.pos()):
+                    if off_path((at.x(), at.y()), *self.path) > POINTER_TOLERANCE_PX:
+                        self.foreign = (at.x(), at.y())
+                        break
+            return False
+
+    watch = PointerWatch()
+
     def move_to(x: int, y: int) -> None:
         """Glide the pointer to ``(x, y)`` in small steps, like a hand does."""
         x0, y0 = position
+        watch.path = ((x0, y0), (x, y))
         distance = max(abs(x - x0), abs(y - y0))
         steps = max(1, distance // DRAG_STEP_PX)
         words: list[object] = []
@@ -154,12 +233,48 @@ def main(argv: list[str] | None = None) -> int:
         position[:] = [x, y]
 
     def press(x: int, y: int) -> None:
-        xdo("mousemove", x, y, "sleep", 0.15, "mousedown", 1, "sleep", 0.12)
+        """Start a gesture: jump to ``(x, y)`` and hold the left button down."""
+        watch.path = ((x, y), (x, y))
+        xdo("mousemove", x, y, "sleep", 0.15)
         position[:] = [x, y]
+        # The jump itself may cross anything; from here on the pointer may not stray.
+        watch.start(app.widgetAt(QtCore.QPoint(x, y)))
+        xdo("mousedown", 1, "sleep", 0.12)
 
-    def release() -> None:
+    def release() -> bool:
+        """End a gesture; ``True`` if no pointer event came from anywhere else."""
+        watch.path = ((position[0], position[1]), (position[0], position[1]))
         xdo("sleep", 0.1, "mouseup", 1)
         pump(0.5)
+        clean = watch.stop()
+        if not clean:
+            print(
+                f"  ..   a pointer event from another source arrived at {watch.foreign} "
+                "during the drag; repeating",
+                flush=True,
+            )
+            keep_clear_of(watch.foreign)
+        return clean
+
+    def keep_clear_of(point: tuple[int, int] | None) -> None:
+        """Move the main window so the tour's windows stay away from the real pointer."""
+        if point is None:
+            return
+        area = app.primaryScreen().availableGeometry()
+        # The floating windows hang over the main window's edges while they are
+        # dragged: this far to the left, to the right and below.
+        left, right, below = 420, 790, 770
+        top = max(area.top(), min(window.y(), area.bottom() - window.height() - below))
+
+        def clearance(x: int) -> int:
+            """How far the point is outside the tour's footprint (negative: inside)."""
+            return max(x - left - point[0], point[0] - (x + window.width() + right))
+
+        candidates = [area.left() + left, area.right() - window.width() - right]
+        best = max(candidates, key=clearance)
+        if clearance(best) > clearance(window.x()):
+            window.move(best, top)
+            pump(0.8)
 
     def chart_is_drawn() -> bool:
         """Whether the chart canvas of the main window shows a picture rather than a void."""
@@ -233,13 +348,17 @@ def main(argv: list[str] | None = None) -> int:
 
     pump(1.0)
     # Leave room on every side: a window that hangs over the edge of the X screen
-    # while it is dragged cannot be read back for the screenshots.
+    # while it is dragged cannot be read back for the screenshots.  And stay away
+    # from where the pointer is now - most likely where the real mouse rests.
     screen_rect = app.primaryScreen().availableGeometry()
+    resting = QtGui.QCursor.pos()
     window.move(
         screen_rect.left() + max(0, (screen_rect.width() - window.width()) // 2),
         screen_rect.top() + max(0, (screen_rect.height() - window.height()) // 3),
     )
-    pump(1.0)
+    pump(0.6)
+    keep_clear_of((resting.x(), resting.y()))
+    pump(0.6)
     print(f"platform={app.platformName()} {version} window={window.geometry()}", flush=True)
     window.apply_scenario(SCENARIOS[1])
     pump(0.8)
@@ -251,6 +370,7 @@ def main(argv: list[str] | None = None) -> int:
 
     def tour(label: str, dock: Any, button: Any, panel: Any) -> None:
         print(f"[{label}]", flush=True)
+        settle = 0.6 if label == "ledger" else 1.5
         button.click()
         pump(1.2 if label == "ledger" else 3.0)
         container = dock.floatingDockContainer()
@@ -271,16 +391,23 @@ def main(argv: list[str] | None = None) -> int:
         shot(f"{label}_1_floating")
 
         # -- move by the title bar ------------------------------------------------
-        before = container.pos()
-        grip = title_point(container)
         delta = QtCore.QPoint(-140, 90)
-        press(grip.x(), grip.y())
-        check(container.isDraggingActive(), "pressing the title bar starts a drag")
-        move_to(grip.x() + delta.x(), grip.y() + delta.y())
-        release()
+        for _ in range(TRIES):
+            container = dock.floatingDockContainer()
+            before = container.pos()
+            grip = title_point(container)
+            press(grip.x(), grip.y())
+            dragging = container.isDraggingActive()
+            move_to(grip.x() + delta.x(), grip.y() + delta.y())
+            clean = release()
+            if clean:
+                break
+            window.float_dock(dock)  # back over the main window, wherever it is now
+            pump(settle)
+        check(dragging, "pressing the title bar starts a drag")
         moved = container.pos() - before
         check(
-            abs(moved.x() - delta.x()) <= 4 and abs(moved.y() - delta.y()) <= 4,
+            clean and abs(moved.x() - delta.x()) <= 4 and abs(moved.y() - delta.y()) <= 4,
             f"title-bar drag moved the window by {moved.x()},{moved.y()} "
             f"(cursor travelled {delta.x()},{delta.y()})",
         )
@@ -288,55 +415,68 @@ def main(argv: list[str] | None = None) -> int:
         shot(f"{label}_2_moved")
 
         # -- resize by the corner and by an edge ----------------------------------
-        size = container.size()
-        corner = container.mapToGlobal(QtCore.QPoint(container.width() - 2, container.height() - 2))
-        press(corner.x(), corner.y())
-        move_to(corner.x() - 150, corner.y() - 90)
-        release()
-        grown = container.size() - size
+        def resize_by(at: QtCore.QPoint, dx: int, dy: int) -> tuple[bool, QtCore.QSize]:
+            """Drag from a point inside the window by ``(dx, dy)``; returns the size change."""
+            grown = QtCore.QSize()
+            clean = False
+            for _ in range(TRIES):
+                size = container.size()
+                start = container.mapToGlobal(at)
+                press(start.x(), start.y())
+                move_to(start.x() + dx, start.y() + dy)
+                clean = release()
+                grown = container.size() - size
+                if clean:
+                    break
+            return clean, grown
+
+        clean, grown = resize_by(
+            QtCore.QPoint(container.width() - 2, container.height() - 2), -150, -90
+        )
         check(
-            abs(grown.width() + 150) <= 6 and abs(grown.height() + 90) <= 6,
+            clean and abs(grown.width() + 150) <= 6 and abs(grown.height() + 90) <= 6,
             f"corner drag resized it by {grown.width()},{grown.height()} (cursor -150,-90)",
         )
-        size = container.size()
-        edge = container.mapToGlobal(QtCore.QPoint(container.width() - 2, container.height() // 2))
-        press(edge.x(), edge.y())
-        move_to(edge.x() + 110, edge.y())
-        release()
-        grown = container.size() - size
+        clean, grown = resize_by(
+            QtCore.QPoint(container.width() - 2, container.height() // 2), 110, 0
+        )
         check(
-            abs(grown.width() - 110) <= 6 and abs(grown.height()) <= 2,
+            clean and abs(grown.width() - 110) <= 6 and abs(grown.height()) <= 2,
             f"right-edge drag resized it by {grown.width()},{grown.height()} (cursor +110,0)",
         )
         shot(f"{label}_3_resized")
 
         # -- drag onto the compass: left, right, bottom ---------------------------
         for name, area in areas:
-            container = dock.floatingDockContainer()
-            if container is None or not dock.isFloating():
-                check(False, f"{name}: the panel is floating before the drag")
-                continue
-            grip = title_point(container)
-            press(grip.x(), grip.y())
-            centre = window.workbench.mapToGlobal(window.workbench.rect().center())
-            move_to(centre.x(), centre.y())  # the compass appears over the main window
-            pump(0.2)
             overlay = window.dock_manager.containerOverlay()
-            check(overlay.isVisible(), f"{name}: the docking compass is showing")
-            target = indicator(area)
-            if target is None:
-                check(False, f"{name}: the compass has an indicator for this side")
-                release()
+            showing = reported = clean = False
+            for _ in range(TRIES):
+                container = dock.floatingDockContainer()
+                if container is None or not dock.isFloating():
+                    break
+                grip = title_point(container)
+                press(grip.x(), grip.y())
+                centre = window.workbench.mapToGlobal(window.workbench.rect().center())
+                move_to(centre.x(), centre.y())  # the compass appears over the main window
+                pump(0.2)
+                showing = overlay.isVisible()
+                target = indicator(area)
+                if target is not None:
+                    move_to(target.x(), target.y())
+                    pump(0.25)
+                    reported = overlay.dropAreaUnderCursor() == area
+                if watch.foreign is None and reported:
+                    shot(f"{label}_4_{name}_compass")
+                clean = release()
+                pump(settle)
+                if clean:
+                    break
+                window.float_dock(dock)  # wherever that drop went, start again floating
+                pump(2.0 * settle)
+            if not check(clean, f"{name}: the drag onto the compass was not interfered with"):
                 continue
-            move_to(target.x(), target.y())
-            pump(0.25)
-            check(
-                overlay.dropAreaUnderCursor() == area,
-                f"{name}: the compass reports this drop area under the cursor",
-            )
-            shot(f"{label}_4_{name}_compass")
-            release()
-            pump(0.6 if label == "ledger" else 1.5)
+            check(showing, f"{name}: the docking compass is showing")
+            check(reported, f"{name}: the compass reports this drop area under the cursor")
             check(not dock.isFloating() and not dock.isClosed(), f"{name}: the panel is docked")
             placed, where = docked_on(panel, area)
             check(placed, f"{name}: it sits on the {name} side of the workbench ({where})")
