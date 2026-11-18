@@ -25,12 +25,11 @@ from cppi_lab.engine.signals import Signals, compute_signals
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Register ``cppidoc://`` and share GL contexts before a QApplication exists."""
-    from PySide6 import QtCore
-
+    """Register ``cppidoc://`` and set the application attributes before a QApplication exists."""
+    from cppi_lab.main import set_application_attributes
     from cppi_lab.ui.doc_scheme import register_scheme
 
-    QtCore.QCoreApplication.setAttribute(QtCore.Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
+    set_application_attributes()
     register_scheme()
     import pyqtgraph as pg
 

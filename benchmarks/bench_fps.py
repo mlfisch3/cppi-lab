@@ -113,13 +113,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    from cppi_lab.main import configure_environment
+    from cppi_lab.main import configure_environment, set_application_attributes
 
     configure_environment()
     import pyqtgraph as pg
-    from PySide6 import QtCore, QtGui, QtOpenGLWidgets, QtWidgets
+    from PySide6 import QtGui, QtOpenGLWidgets, QtWidgets
 
-    QtCore.QCoreApplication.setAttribute(QtCore.Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
+    set_application_attributes()
     surface = QtGui.QSurfaceFormat.defaultFormat()
     surface.setSwapInterval(0)
     QtGui.QSurfaceFormat.setDefaultFormat(surface)

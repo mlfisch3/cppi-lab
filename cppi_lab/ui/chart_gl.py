@@ -1274,6 +1274,15 @@ class RasterBackend:
                 painter.drawImage(target, atlas.image, source)
 
 
+#: Events Qt sends to OpenGL widgets when an ancestor moves to another parent or window.
+_WINDOW_CHANGE_EVENTS = frozenset(
+    {
+        QtCore.QEvent.Type.WindowAboutToChangeInternal,
+        QtCore.QEvent.Type.WindowChangeInternal,
+    }
+)
+
+
 class ChartCanvas(pg.GraphicsLayoutWidget):
     """A pyqtgraph layout whose whole content is drawn by one frame replay.
 
@@ -1290,11 +1299,47 @@ class ChartCanvas(pg.GraphicsLayoutWidget):
         self._frames = frames
         self._gl: GLBackend | None = None
         self._raster = RasterBackend()
+        self._surface_timer = QtCore.QTimer(self)
+        self._surface_timer.setSingleShot(True)
+        self._surface_timer.setInterval(0)
+        self._surface_timer.timeout.connect(self.recreate_surface)
 
     @property
     def accelerated(self) -> bool:
         """Whether the viewport is an OpenGL widget."""
         return isinstance(self.viewport(), OpenGLHelpers.GraphicsViewGLWidget)
+
+    def viewportEvent(self, event: QtCore.QEvent) -> bool:
+        # When an ancestor is re-parented (the docking system does that whenever a
+        # panel is docked or floated), Qt tells every OpenGL widget below it that
+        # its window is about to change, and the widget drops the texture through
+        # which its framebuffer is composited into the window.  A stand-alone
+        # QOpenGLWidget gets it back in its own paint event; the viewport of a
+        # graphics view never runs that paint event, so the canvas would stay
+        # black until the next resize.  Recreate the surface once the change is
+        # complete.
+        if event.type() in _WINDOW_CHANGE_EVENTS:
+            self._surface_timer.start()
+        return bool(super().viewportEvent(event))
+
+    def recreate_surface(self) -> None:
+        """Have the OpenGL viewport rebuild its framebuffer and compositing texture.
+
+        A scroll area keeps the Resize events of its viewport to itself and
+        asks the viewport to rebuild its framebuffer only when the size really
+        changed, so the viewport is made one pixel shorter and restored.  Both
+        steps happen before anything is painted.
+        """
+        viewport = self.viewport()
+        if not isinstance(viewport, OpenGLHelpers.GraphicsViewGLWidget):
+            return
+        if not viewport.isVisible() or viewport.height() < 2:
+            return
+        margins = self.viewportMargins()
+        self.setViewportMargins(
+            margins.left(), margins.top(), margins.right(), margins.bottom() + 1
+        )
+        self.setViewportMargins(margins)
 
     def drawForeground(self, painter: QtGui.QPainter, rect: QtCore.QRectF) -> None:
         frames, atlas = self._frames()

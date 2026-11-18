@@ -32,6 +32,7 @@ from cppi_lab.engine.kernel_numba import (
     event_bit,
 )
 from cppi_lab.ui import theme
+from cppi_lab.ui.widgets import ElidedLabel
 
 IntArray = NDArray[np.int64]
 
@@ -303,6 +304,12 @@ class TelemetryTableModel(QtCore.QAbstractTableModel):
         return frame.height
 
 
+EXPORT_CAPTION = "Export CSV / Parquet…"
+EXPORT_CAPTION_SHORT = "Export…"
+#: Below this widget width the export button shows a short caption.
+EXPORT_CAPTION_MIN_WIDTH = 560
+
+
 class LedgerWidget(QtWidgets.QWidget):
     """Filter bar plus the telemetry table."""
 
@@ -321,18 +328,26 @@ class LedgerWidget(QtWidgets.QWidget):
         self.filter_combo = QtWidgets.QComboBox(bar)
         self.filter_combo.addItems(list(FILTERS))
         self.filter_combo.setAccessibleName("Row filter")
+        # The bar must fit a narrow docked panel: the combo may shorten its text,
+        # the count elides, and the export button switches to a short caption.
+        self.filter_combo.setSizeAdjustPolicy(
+            QtWidgets.QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.filter_combo.setMinimumContentsLength(10)
         self.filter_combo.currentTextChanged.connect(self._on_filter)
-        self.count_label = QtWidgets.QLabel("", bar)
+        self.count_label = ElidedLabel("", bar)
         self.count_label.setProperty("role", "muted")
-        self.export_button = QtWidgets.QPushButton("Export CSV / Parquet…", bar)
+        self.export_button = QtWidgets.QPushButton(EXPORT_CAPTION, bar)
+        self.export_button.setToolTip("Export the rows shown, in this order, as CSV or Parquet")
+        short = self.export_button.fontMetrics().horizontalAdvance(EXPORT_CAPTION_SHORT)
+        self.export_button.setMinimumWidth(short + 24)
         self.export_button.clicked.connect(self._choose_export)
         bar_layout = QtWidgets.QHBoxLayout(bar)
         bar_layout.setContentsMargins(8, 5, 8, 5)
         bar_layout.setSpacing(8)
         bar_layout.addWidget(QtWidgets.QLabel("Show", bar))
         bar_layout.addWidget(self.filter_combo)
-        bar_layout.addWidget(self.count_label)
-        bar_layout.addStretch(1)
+        bar_layout.addWidget(self.count_label, 1)
         bar_layout.addWidget(self.export_button)
 
         self.table = QtWidgets.QTableView(self)
@@ -410,6 +425,7 @@ class LedgerWidget(QtWidgets.QWidget):
         shown = self.model.rowCount()
         total = int(self.model._telemetry.shape[0])
         self.count_label.setText(f"{shown:,} of {total:,} timesteps")
+        self.count_label.setToolTip(self.count_label.text())
         if shown == 0 and total > 0:
             self.empty_label.setText(
                 f"No timestep of this back-test matches \u201c{self.model.filter_name}\u201d."
@@ -426,6 +442,10 @@ class LedgerWidget(QtWidgets.QWidget):
     def resizeEvent(self, event: QtGui.QResizeEvent) -> None:
         super().resizeEvent(event)
         self._place_empty_label()
+        wide = self.width() >= EXPORT_CAPTION_MIN_WIDTH
+        caption = EXPORT_CAPTION if wide else EXPORT_CAPTION_SHORT
+        if self.export_button.text() != caption:
+            self.export_button.setText(caption)
 
     # -- chart synchronisation -------------------------------------------------------
     def current_bar(self) -> int:

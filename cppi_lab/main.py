@@ -19,6 +19,35 @@ import os
 import sys
 from pathlib import Path
 
+#: Where a copy of ``libxcb-cursor.so.0`` installed without root is looked for.
+USER_XCB_CURSOR_PATHS: tuple[str, ...] = (
+    "~/.local/lib/libxcb-cursor.so.0",
+    "~/.local/lib/x86_64-linux-gnu/libxcb-cursor.so.0",
+    "~/.nix-profile/lib/libxcb-cursor.so.0",
+)
+
+
+def _load_xcb_cursor() -> bool:
+    """Load ``libxcb-cursor.so.0``, which Qt's X11 plugin has needed since Qt 6.5.
+
+    The system library is tried first, then the file named by
+    ``CPPI_LAB_XCB_CURSOR``, then the per-user locations above.  A library
+    loaded here satisfies the plugin's dependency when Qt loads it later, so a
+    copy in the home directory works without ``LD_LIBRARY_PATH``.
+    """
+    candidates = ["libxcb-cursor.so.0"]
+    override = os.environ.get("CPPI_LAB_XCB_CURSOR")
+    if override:
+        candidates.append(override)
+    candidates.extend(str(Path(path).expanduser()) for path in USER_XCB_CURSOR_PATHS)
+    for candidate in candidates:
+        try:
+            ctypes.CDLL(candidate, mode=ctypes.RTLD_GLOBAL)
+        except OSError:
+            continue
+        return True
+    return False
+
 
 def _prefer_xcb_on_linux() -> None:
     """Prefer X11 on Linux when it is usable.
@@ -33,11 +62,8 @@ def _prefer_xcb_on_linux() -> None:
         return
     if not os.environ.get("DISPLAY"):
         return
-    try:
-        ctypes.CDLL("libxcb-cursor.so.0")
-    except OSError:
-        return
-    os.environ["QT_QPA_PLATFORM"] = "xcb"
+    if _load_xcb_cursor():
+        os.environ["QT_QPA_PLATFORM"] = "xcb"
 
 
 def _running_under_wsl() -> bool:
@@ -70,6 +96,28 @@ def configure_environment() -> None:
     _use_software_web_rendering_under_wsl()
 
 
+def set_application_attributes() -> None:
+    """Application attributes that must be set before ``QApplication`` is created.
+
+    * OpenGL contexts are shared: QtWebEngine and the chart canvas live in the
+      same window, and a panel keeps its context when it is docked or floated.
+    * A widget that needs a native window does not drag its siblings along.
+      Without this the docking system turns half of the main window into
+      separate X windows the first time a panel floats, and stale geometry
+      events from the server can then move child widgets back to where they
+      were.
+    * Fractional display scale factors are passed through unrounded.
+    """
+    from PySide6 import QtCore, QtGui
+
+    attribute = QtCore.Qt.ApplicationAttribute
+    QtCore.QCoreApplication.setAttribute(attribute.AA_ShareOpenGLContexts)
+    QtCore.QCoreApplication.setAttribute(attribute.AA_DontCreateNativeWidgetSiblings)
+    QtGui.QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
+        QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+    )
+
+
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="cppi-lab",
@@ -100,12 +148,9 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(sys.argv[1:] if argv is None else argv)
     configure_environment()
 
-    from PySide6 import QtCore, QtGui, QtWidgets
+    from PySide6 import QtCore, QtWidgets
 
-    QtCore.QCoreApplication.setAttribute(QtCore.Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
-    QtGui.QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
-        QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
-    )
+    set_application_attributes()
 
     from cppi_lab.ui.doc_scheme import register_scheme
 

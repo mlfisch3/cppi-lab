@@ -40,14 +40,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
 
-    from cppi_lab.main import configure_environment
+    from cppi_lab.main import configure_environment, set_application_attributes
 
     configure_environment()
     import pyqtgraph as pg
     import PySide6QtAds as ads
     from PySide6 import QtCore, QtWidgets
 
-    QtCore.QCoreApplication.setAttribute(QtCore.Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
+    set_application_attributes()
     from cppi_lab.ui import theme
     from cppi_lab.ui.doc_scheme import register_scheme
 

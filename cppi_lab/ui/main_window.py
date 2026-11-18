@@ -27,6 +27,7 @@ from pathlib import Path
 
 import PySide6QtAds as ads
 from PySide6 import QtCore, QtGui, QtWidgets
+from shiboken6 import isValid
 
 from cppi_lab.config.defaults import (
     DEFAULT_START_MS,
@@ -43,15 +44,35 @@ from cppi_lab.data.loader import (
 )
 from cppi_lab.engine.controller import RunOutput, SimulationController
 from cppi_lab.engine.monte_carlo import EnsembleResult, run_ensemble
+from cppi_lab.ui import x11
 from cppi_lab.ui.chart_workspace import ChartWorkspace
 from cppi_lab.ui.control_sidebar import ControlSidebar
 from cppi_lab.ui.doc_scheme import DocRegistry, load_registry
 from cppi_lab.ui.kpi_ribbon import KpiRibbon, compute_kpis
 from cppi_lab.ui.ledger_window import LedgerWidget
 from cppi_lab.ui.popover_manager import RichPopoverManager
-from cppi_lab.ui.widgets import ElasticComboBox, ElidedLabel
+from cppi_lab.ui.widgets import ElasticComboBox, ElidedLabel, ResizeGrips, TitleBarPressFix
 
 TOP_BAR_HEIGHT = 38
+
+
+def floating_window_flags(platform_name: str) -> QtCore.Qt.WindowType:
+    """Window type and hints of a floating secondary window (TSD section 4.2).
+
+    The TSD asks for ``Tool | WindowStaysOnTopHint | WindowMinimizeButtonHint |
+    WindowMaximizeButtonHint``.  ``Tool`` becomes a utility window on X11, and a
+    window manager that does not know that type never shows the window at
+    all; there an ordinary window is used instead.  It still belongs to the
+    main window (it is transient for it), which is what keeps it above.
+    """
+    flag = QtCore.Qt.WindowType
+    kind = flag.Tool if x11.shows_utility_windows(platform_name) else flag.Window
+    return (
+        kind
+        | flag.WindowStaysOnTopHint
+        | flag.WindowMinimizeButtonHint
+        | flag.WindowMaximizeButtonHint
+    )
 
 
 def _ms(year: int, month: int, day: int) -> int:
@@ -392,12 +413,23 @@ class MainWindow(QtWidgets.QMainWindow):
         ads.CDockManager.setConfigFlag(flag.FocusHighlighting, False)
         ads.CDockManager.setConfigFlag(flag.DockAreaHasTabsMenuButton, False)
         ads.CDockManager.setConfigFlag(flag.FloatingContainerHasWidgetTitle, True)
+        # On X11 the floating windows carry the docking system's own title bar.
+        # Dragging is then handled entirely inside the application, so dropping
+        # onto the docking compass does not depend on how a particular window
+        # manager reports a move it performs itself.
+        own_title_bar = getattr(flag, "FloatingContainerForceQWidgetTitleBar", None)
+        if own_title_bar is not None:
+            on_x11 = QtGui.QGuiApplication.platformName() == "xcb"
+            ads.CDockManager.setConfigFlag(own_title_bar, on_x11)
         # TSD 4.2: a docked panel can also be collapsed into an auto-hide side bar.
         auto_hide = ads.CDockManager.eAutoHideFlag
         ads.CDockManager.setAutoHideConfigFlag(auto_hide.AutoHideFeatureEnabled, True)
         ads.CDockManager.setAutoHideConfigFlag(auto_hide.DockAreaHasAutoHideButton, True)
         ads.CDockManager.setAutoHideConfigFlag(auto_hide.AutoHideCloseButtonCollapsesDock, False)
         self.dock_manager = ads.CDockManager(self)
+        self._title_press_fix = TitleBarPressFix(self)
+        self._floating_grips: set[ResizeGrips] = set()
+        self.dock_manager.floatingWidgetCreated.connect(self._prepare_floating_container)
 
         feature = ads.CDockWidget.DockWidgetFeature
         self.central_dock = ads.CDockWidget(self.dock_manager, "Workbench")
@@ -506,7 +538,8 @@ class MainWindow(QtWidgets.QMainWindow):
         QtCore.QTimer.singleShot(80, partial(self._finish_floating, dock))
 
     def _finish_floating(self, dock: ads.CDockWidget) -> None:
-        if not dock.isFloating() or dock.isClosed():
+        # Called again from timers; the window may have been closed in between.
+        if not isValid(dock) or not dock.isFloating() or dock.isClosed():
             return
         self._apply_floating_flags(dock)
         container = dock.floatingDockContainer()
@@ -541,6 +574,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _size_docked_panel(self, dock: ads.CDockWidget, area: ads.DockWidgetArea) -> None:
         """Give a freshly docked panel a useful share; the chart reflows into the rest."""
+        if not isValid(dock):  # called from a timer: the window may be gone by now
+            return
         target = dock.dockAreaWidget()
         if target is None or dock.isFloating() or dock.isClosed():
             return
@@ -555,22 +590,43 @@ class MainWindow(QtWidgets.QMainWindow):
             sizes = [panel, total - panel] if left else [total - panel, panel]
         self.dock_manager.setSplitterSizes(target, sizes)
 
+    def _prepare_floating_container(self, container: ads.CFloatingDockContainer) -> None:
+        """Give a floating window with the docking system's own title bar its handles.
+
+        Such a window is frameless: it gets edge and corner grips for resizing
+        and the title-bar correction described in :class:`TitleBarPressFix`.
+        A window with a native title bar is left to the window manager.
+        """
+        native = getattr(container, "hasNativeTitleBar", None)
+        if native is None or native() or container.property("cppiHandles"):
+            return
+        container.setProperty("cppiHandles", True)
+        # The grips are Python objects owned by a window the docking system
+        # creates and destroys; without a reference of our own their Python
+        # side (and with it their behaviour) can be collected while the window
+        # is still there.
+        grips = ResizeGrips(container)
+        self._floating_grips.add(grips)
+        container.destroyed.connect(partial(self._floating_grips.discard, grips))
+        bar = container.titleBarWidget()
+        if bar is not None:
+            bar.installEventFilter(self._title_press_fix)
+
     def _apply_floating_flags(self, dock: ads.CDockWidget) -> None:
         """Window flags of TSD section 4.2 for a floating container."""
         container = dock.floatingDockContainer()
         if container is None:
             return
-        wanted = (
-            QtCore.Qt.WindowType.Tool
-            | QtCore.Qt.WindowType.WindowStaysOnTopHint
-            | QtCore.Qt.WindowType.WindowMinimizeButtonHint
-            | QtCore.Qt.WindowType.WindowMaximizeButtonHint
-        )
+        self._prepare_floating_container(container)
+        wanted = floating_window_flags(QtGui.QGuiApplication.platformName())
         current = container.windowFlags()
-        if (current & wanted) == wanted:
+        # Keep the docking system's own hints (frameless, close button, ...) and
+        # replace only the window type.
+        target = (current & ~QtCore.Qt.WindowType.WindowType_Mask) | wanted
+        if current == target:
             return
         geometry = container.geometry()
-        container.setWindowFlags(current | wanted)
+        container.setWindowFlags(target)
         container.setWindowTitle(f"{dock.windowTitle()} - CPPI-Lab")
         container.setGeometry(geometry)
         container.show()
