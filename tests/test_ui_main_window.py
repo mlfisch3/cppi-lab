@@ -231,7 +231,8 @@ def test_everything_fits_one_1080p_screen_without_scrolling(
 ) -> None:
     qtbot.wait(50)
     sidebar = window.sidebar
-    assert not sidebar.scroll_area.verticalScrollBar().isVisible()
+    assert not sidebar.scrolls()
+    assert not sidebar.scroll_area.verticalScrollBar().isEnabled()  # an empty gutter
     assert sidebar.required_height() <= sidebar.height()
     assert sidebar.body.height() >= sidebar.body.sizeHint().height()
     for row in sidebar.rows.values():
@@ -254,7 +255,7 @@ def test_everything_fits_one_1080p_screen_without_scrolling(
 def test_small_screens_scroll_only_the_sidebar(qtbot: QtBot, window: MainWindow) -> None:
     window.resize(1366, 728)
     qtbot.wait(80)
-    assert window.sidebar.scroll_area.verticalScrollBar().isVisible()
+    assert window.sidebar.scrolls()
     assert window.sidebar.reset_all_button.isVisible()
     assert all(plot.height() > 60 for plot in window.chart.plots)
     assert window.kpis.height() == 64

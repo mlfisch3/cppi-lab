@@ -37,6 +37,21 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 @pytest.fixture(scope="session", autouse=True)
+def _themed_application(qapp: object) -> None:
+    """Style the test application exactly as ``cppi-lab`` styles the real one.
+
+    Fonts, paddings and borders come from the theme; without it every widget
+    has a different size than on screen and layout tests would prove nothing.
+    """
+    from PySide6 import QtWidgets
+
+    from cppi_lab.ui import theme
+
+    assert isinstance(qapp, QtWidgets.QApplication)
+    theme.apply_theme(qapp)
+
+
+@pytest.fixture(scope="session", autouse=True)
 def _release_web_profile() -> Iterator[None]:
     """Delete every web page before the shared QtWebEngine profile goes away."""
     yield

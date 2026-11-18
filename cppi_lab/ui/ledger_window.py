@@ -32,7 +32,7 @@ from cppi_lab.engine.kernel_numba import (
     event_bit,
 )
 from cppi_lab.ui import theme
-from cppi_lab.ui.widgets import ElidedLabel
+from cppi_lab.ui.widgets import ElasticComboBox, ElidedLabel
 
 IntArray = NDArray[np.int64]
 
@@ -325,15 +325,13 @@ class LedgerWidget(QtWidgets.QWidget):
         bar = QtWidgets.QWidget(self)
         bar.setObjectName("ledgerBar")
         bar.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.filter_combo = QtWidgets.QComboBox(bar)
+        # The bar must fit a narrow docked panel: the combo shows every filter
+        # name in full while there is room and ends it with an ellipsis when
+        # squeezed, the count elides, and the export button switches to a short
+        # caption.
+        self.filter_combo = ElasticComboBox(bar)
         self.filter_combo.addItems(list(FILTERS))
         self.filter_combo.setAccessibleName("Row filter")
-        # The bar must fit a narrow docked panel: the combo may shorten its text,
-        # the count elides, and the export button switches to a short caption.
-        self.filter_combo.setSizeAdjustPolicy(
-            QtWidgets.QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
-        )
-        self.filter_combo.setMinimumContentsLength(10)
         self.filter_combo.currentTextChanged.connect(self._on_filter)
         self.count_label = ElidedLabel("", bar)
         self.count_label.setProperty("role", "muted")

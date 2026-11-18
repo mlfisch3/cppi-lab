@@ -15,6 +15,8 @@ GRID = "#1E293B"
 PANEL_RAISED = "#162033"
 BORDER = "#243044"
 HOVER = "#1B2740"
+#: Outline of things that float above the workbench: popovers and floating windows.
+FLOAT_BORDER = "#33506E"
 
 # Text
 TEXT = "#E5E7EB"
@@ -87,6 +89,8 @@ QLabel[role="faint"] {{ color: {TEXT_FAINT}; }}
 /* ---- sidebar ---------------------------------------------------------- */
 #sidebar {{ background: {PANEL}; border-right: 1px solid {BORDER}; }}
 #sidebarScroll {{ background: {PANEL}; border: none; }}
+#sidebarScroll QScrollBar:vertical {{ background: {PANEL}; }}
+#sidebarScroll QScrollBar::handle:vertical:disabled {{ background: transparent; }}
 #sidebarBody {{ background: {PANEL}; }}
 #groupHeader {{
     color: {ACCENT}; font-size: 10px; font-weight: 700; letter-spacing: 1.1px;
@@ -164,9 +168,11 @@ QCheckBox::indicator:checked {{ background: {ACCENT}; border-color: {ACCENT}; }}
 #kpiTitle {{
     color: {TEXT_MUTED}; font-size: 9px; font-weight: 700; letter-spacing: 0.9px;
 }}
+#kpiTitle[layout="compact"], #kpiTitle[layout="grid"] {{ letter-spacing: 0.6px; }}
 #kpiValue {{ font-family: {MONO_FAMILY}; font-size: 15px; font-weight: 700; color: {TEXT}; }}
-#kpiValue[compact="true"] {{ font-size: 12px; }}
-#kpiSub[compact="true"] {{ font-size: 9px; }}
+#kpiValue[layout="compact"] {{ font-size: 12px; }}
+#kpiValue[layout="grid"] {{ font-size: 11px; }}
+#kpiSub[layout="compact"] {{ font-size: 9px; }}
 #kpiValue[tone="good"] {{ color: {GOOD}; }}
 #kpiValue[tone="warn"] {{ color: {WARN}; }}
 #kpiValue[tone="bad"] {{ color: {BAD}; }}
@@ -220,7 +226,7 @@ QProgressBar {{
 QProgressBar::chunk {{ background: {ACCENT}; border-radius: 2px; }}
 
 /* ---- popovers ----------------------------------------------------------- */
-#popover {{ background: {PANEL_RAISED}; border: 1px solid #33506E; border-radius: 6px; }}
+#popover {{ background: {PANEL_RAISED}; border: 1px solid {FLOAT_BORDER}; border-radius: 6px; }}
 #popoverTitleBar {{ background: transparent; }}
 #popoverTitle {{ font-size: 12px; font-weight: 700; color: {TEXT}; }}
 QToolButton#popoverButton {{
@@ -243,7 +249,7 @@ ads--CTitleBarButton, #tabCloseButton, #floatingTitleCloseButton, #floatingTitle
 }}
 ads--CTitleBarButton:hover, #tabCloseButton:hover {{ background: {HOVER}; border-radius: 3px; }}
 ads--CDockSplitter::handle {{ background: {BORDER}; }}
-ads--CFloatingDockContainer {{ background: {CANVAS}; border: 1px solid #33506E; }}
+ads--CFloatingDockContainer {{ background: {CANVAS}; border: 1px solid {FLOAT_BORDER}; }}
 ads--CFloatingWidgetTitleBar {{ background: {PANEL}; }}
 #floatingTitleLabel {{ color: {TEXT}; font-size: 11px; font-weight: 600; }}
 ads--CAutoHideTab {{ background: {PANEL}; color: {TEXT_MUTED}; padding: 4px; }}

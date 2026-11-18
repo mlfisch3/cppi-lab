@@ -460,10 +460,10 @@
       "summary": "The conservation assertion of the strategy: $V_t \\ge F - 10^{-6}$ on every bar that did not gap. It is counted inside the simulation kernel, not inferred afterwards.",
       "math": "V_t \\ge F = N_0 \\cdot P_{\\text{liq}} + c_0",
       "details": [
-        "<strong>INTACT</strong>: the trigger was never reached.",
-        "<strong>LIQUIDATED</strong>: the emergency exit fired at the trigger and the proceeds were at least $F$.",
+        "<strong>INTACT</strong>: the account never fell below $F$. An emergency exit at the trigger keeps the floor, so it does not change this verdict: the sub-line counts the liquidations and says whether the strategy holds BTC again or is in cash, and the value turns amber.",
         "<strong>GAP BREACH</strong>: a bar opened below the trigger, so the exit could only be executed at the open. This is the one case the model does not protect against, and the shortfall is shown.",
-        "With the Monte Carlo fan on, the subtitle reports breaches and liquidations across all 100 seeds."
+        "<strong>VIOLATED</strong>: equity was below $F$ on a bar that did not gap. The guards of the state machine exclude this; the card would show the number of such bars.",
+        "With the Monte Carlo fan on, the sub-line reports breaches and liquidations across all 100 seeds."
       ],
       "implementation": "",
       "concept": "sec-5-state-machine"

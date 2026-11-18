@@ -523,7 +523,7 @@ and the amber chip in the top bar keeps that visible.</p>
 <tr><th>Card</th><th>Reading</th></tr>
 <tr><td>Net Equity $V_T$</td><td>$c_T + n_T P_T (1-\gamma)$, with the change since the first bar.</td></tr>
 <tr><td>Cushion</td><td>$\max(0, V_T - F)$, and the minimum of $V_t - F$ over the run. At zero the account is cash-locked.</td></tr>
-<tr><td>Floor Integrity</td><td>Intact, liquidated at the trigger, or gap breach (§5.1), plus the conservation count.</td></tr>
+<tr><td>Floor Integrity</td><td>Intact, gap breach (§5.1) or violated, from the conservation count. While the floor is intact the sub-line counts the emergency liquidations and says whether the strategy holds BTC again or is in cash.</td></tr>
 <tr><td>BTC Held</td><td>$n_T$ and the recoverable inventory $n_{\max,T}$ (§1.2).</td></tr>
 <tr><td>Trigger</td><td>$P_{\text{floor},T}$ and the buffer above $P_{\text{liq}}$; amber once whipsaw has more than doubled the baseline buffer.</td></tr>
 <tr><td>Fills</td><td>Maker and taker executions, and the maker share of traded volume.</td></tr>

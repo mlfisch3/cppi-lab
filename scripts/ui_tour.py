@@ -10,11 +10,14 @@ OpenGL and QtWebEngine enabled exactly as ``cppi-lab`` does, and performs the
 same actions a user would: editing parameters, hovering ``?`` badges, opening,
 floating and docking the ledger and the documentation, following links.
 
-Screenshots are taken with ``QWidget.grab()`` by default.  That cannot see an
-OpenGL viewport on every platform (it returns black under WSLg), so
-``--shot-cmd`` may name an external command that captures the real window
-from the compositor; ``{title}`` is replaced by the window-title substring
-and ``{out}`` by the PNG path.
+On the ``xcb`` platform each screenshot is assembled from the application's
+windows as the X server holds them (see ``x11_capture.py``; needs ``xdotool``
+and ImageMagick's ``import``), so it shows the OpenGL chart and the floating
+windows where they really are.  Elsewhere ``QWidget.grab()`` is used, which
+cannot see an OpenGL viewport on every platform; ``--shot-cmd`` may then name
+an external command that captures the real window from the compositor, with
+``{title}`` replaced by the window-title substring and ``{out}`` by the PNG
+path.
 """
 
 from __future__ import annotations
@@ -35,6 +38,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--size", default="1920x1040")
     parser.add_argument("--only", nargs="*", default=None, help="run only these steps")
     parser.add_argument("--shot-cmd", default="", help="external capture command")
+    parser.add_argument("--xdotool", default="", help="xdotool binary (xcb screenshots)")
+    parser.add_argument("--capture", default="", help="ImageMagick import binary")
     parser.add_argument("--no-opengl", action="store_true")
     parser.add_argument("--settle", type=float, default=0.9, help="seconds to wait per step")
     args = parser.parse_args(argv)
@@ -83,13 +88,31 @@ def main(argv: list[str] | None = None) -> int:
             app.processEvents()
             time.sleep(0.01)
 
-    pump(1.5)
-    print(f"platform={app.platformName()} opengl={use_gl} size={window.width()}x{window.height()}")
+    pump(1.0)
+    from x11_capture import X11Capture
+
+    x11 = X11Capture(app, window, args.xdotool, args.capture)
+    through_x = not args.shot_cmd and not x11.usable()
+    if through_x:
+        # Keep clear of the screen edges: a window hanging over one cannot be read back.
+        area = app.primaryScreen().availableGeometry()
+        window.move(
+            area.left() + max(0, (area.width() - window.width()) // 2),
+            area.top() + max(0, (area.height() - window.height()) // 3),
+        )
+    pump(1.0)
+    how = "x11" if through_x else ("external" if args.shot_cmd else "grab")
+    print(
+        f"platform={app.platformName()} opengl={use_gl} "
+        f"size={window.width()}x{window.height()} screenshots={how}"
+    )
 
     def shot(name: str) -> None:
         pump()
         target = args.out / f"{name}.png"
-        if args.shot_cmd:
+        if through_x:
+            x11.compose().save(str(target))
+        elif args.shot_cmd:
             command = args.shot_cmd.format(title="CPPI-Lab", out=str(target))
             subprocess.run(shlex.split(command), check=False, capture_output=True)
         else:

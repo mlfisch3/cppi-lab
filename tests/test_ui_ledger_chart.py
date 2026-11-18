@@ -373,7 +373,7 @@ def test_liquidation_badges_cluster_and_never_overlap(qtbot: QtBot, bundled: Mar
     qtbot.wait(30)
     liquidations = int(np.count_nonzero(run.result.flags & event_bit(7)))
     assert liquidations >= 5
-    scene, _ = widget.frames()
+    scene, overlay = widget.frames()
     badges = widget.badges
     assert 1 <= len(badges) < liquidations  # close flashes share one label
     assert sum(badge.count for badge in badges) == liquidations  # none is lost
@@ -384,7 +384,7 @@ def test_liquidation_badges_cluster_and_never_overlap(qtbot: QtBot, bundled: Mar
         assert badge.x + badge.width <= pane.right + 0.5  # whole inside the pane
         assert badge.text in [
             text
-            for op in scene.find("badge-text")
+            for op in overlay.find("badge-text")
             for _, _, text, _ in op.texts  # type: ignore[union-attr]
         ]
     for i, first in enumerate(badges):
@@ -392,9 +392,20 @@ def test_liquidation_badges_cluster_and_never_overlap(qtbot: QtBot, bundled: Mar
             apart = first.x + first.width <= second.x or second.x + second.width <= first.x
             stacked = first.y + first.height <= second.y or second.y + second.height <= first.y
             assert apart or stacked
-    # The opaque labels are drawn after every flash line, so no line strikes through one.
-    tags = [op.tag for op in scene.ops if op.clip == 0]
-    assert tags.index("badge") > tags.index("liquidation")
+    # The opaque labels are drawn with the overlay - after every flash line of the
+    # scene and after the crosshair lines - so no line strikes through one.
+    assert not scene.find("badge")
+    assert len(overlay.find("badge")) == len(badges)
+    widget.set_hover_bar(100)
+    widget.set_selected_bar(200)
+    _, overlay = widget.frames()
+    tags = [op.tag for op in overlay.ops]
+    assert tags.index("badge") > max(
+        index for index, tag in enumerate(tags) if tag.startswith("crosshair")
+    )
+    assert len(overlay.find("badge")) == len(badges)  # still there while hovering
+    widget.set_hover_bar(-1)
+    widget.set_selected_bar(-1)
     # Zoomed in on one liquidation the label is the plain one again.
     bar = int(np.nonzero(run.result.flags & event_bit(7))[0][0])
     widget.set_visible_range(float(widget._x[bar]) - 1_800.0, float(widget._x[bar]) + 1_800.0)
@@ -430,7 +441,7 @@ def test_crosshair_and_readout(chart: ChartWorkspace, run: RunOutput) -> None:
     assert chart.hover_time is None
     assert chart.readouts == ["", "", ""]
     _, overlay = chart.frames()
-    assert not overlay.ops
+    assert not [op for op in overlay.ops if op.tag.startswith(("crosshair", "readout"))]
 
     chart.set_selected_bar(2_000)
     assert chart.selected_bar == 2_000

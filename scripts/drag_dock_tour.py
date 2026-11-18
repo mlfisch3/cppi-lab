@@ -25,7 +25,7 @@ A screenshot is saved in the middle of each docking drag (button still held,
 compass and drop preview showing) and after each drop.  The X server of a
 rootless session (WSLg) cannot be captured as a whole, so each screenshot is
 assembled from the application's own windows, read back from the X server
-one by one and placed at their screen positions.
+one by one and placed at their screen positions (see ``x11_capture.py``).
 
 Exit status 0 means every step was verified; any failed check is printed and
 makes the status 1.  The script needs the ``xcb`` platform (see the README)
@@ -35,11 +35,9 @@ and ``xdotool``.
 from __future__ import annotations
 
 import argparse
-import re
 import shutil
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -61,14 +59,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--only", choices=("ledger", "docs"), default=None)
     args = parser.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
-    scratch = Path(tempfile.mkdtemp(prefix="cppi-lab-drag-"))
 
     from cppi_lab.main import configure_environment, set_application_attributes
 
     configure_environment()
     import pyqtgraph as pg
     import PySide6QtAds as ads
-    from PySide6 import QtCore, QtGui, QtWidgets
+    from PySide6 import QtCore, QtWidgets
 
     set_application_attributes()
     from cppi_lab.ui import theme
@@ -96,6 +93,7 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, subprocess.CalledProcessError) as exc:
         print(f"xdotool is not usable ({exc}); pass --xdotool PATH")
         return 2
+    from x11_capture import X11Capture
 
     from cppi_lab.data.loader import load_bundled
     from cppi_lab.engine.controller import warmup
@@ -108,6 +106,11 @@ def main(argv: list[str] | None = None) -> int:
     width, _, height = args.size.partition("x")
     window.resize(int(width), int(height))
     window.show()
+    capture = X11Capture(app, window, args.xdotool, args.capture)
+    problem = capture.usable()
+    if problem:
+        print(f"cannot take screenshots: {problem}")
+        return 2
 
     failures: list[str] = []
 
@@ -158,57 +161,10 @@ def main(argv: list[str] | None = None) -> int:
         xdo("sleep", 0.1, "mouseup", 1)
         pump(0.5)
 
-    def top_levels() -> list[Any]:
-        """The application's visible top-level windows, bottom to top."""
-        shown = [w for w in app.topLevelWidgets() if w.isVisible() and w.width() > 1]
-
-        def layer(widget: Any) -> int:
-            if widget is window:
-                return 0
-            if isinstance(widget, ads.CFloatingDockContainer):
-                return 1
-            return 2  # drop overlays, menus, tool tips
-
-        return sorted(shown, key=layer)
-
-    def x_window(widget: Any) -> str:
-        """X window id of a top-level widget.
-
-        The docking system re-creates the native window of a floating panel,
-        and the id Qt reports for it afterwards is not the one on screen, so a
-        floating panel is looked up by its title instead.
-        """
-        title = widget.windowTitle()
-        if widget is not window and title:
-            found = subprocess.run(
-                [args.xdotool, "search", "--name", f"^{re.escape(title)}$"],
-                capture_output=True,
-                text=True,
-                check=False,
-            ).stdout.split()
-            if found:
-                return found[-1]
-        return str(int(widget.winId()))
-
-    def read_back(widget: Any) -> QtGui.QImage:
-        """Pixels of one top-level window as the X server holds them."""
-        target = scratch / "window.png"
-        target.unlink(missing_ok=True)
-        try:
-            subprocess.run(
-                [args.capture, "-window", x_window(widget), str(target)],
-                capture_output=True,
-                timeout=10,
-                check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired):
-            return QtGui.QImage()
-        return QtGui.QImage(str(target))
-
     def chart_is_drawn() -> bool:
         """Whether the chart canvas of the main window shows a picture rather than a void."""
         pump(0.3)
-        image = read_back(window)
+        image = capture.read_back(window)
         canvas = window.chart.canvas
         origin = canvas.mapTo(window, QtCore.QPoint(0, 0))
         dark = total = 0
@@ -220,24 +176,8 @@ def main(argv: list[str] | None = None) -> int:
         return total > 0 and dark / total < 0.05
 
     def shot(name: str) -> None:
-        """Assemble a screenshot from the application's windows as the X server holds them."""
         pump(0.35)
-        windows = top_levels()
-        bounds = QtCore.QRect()
-        for widget in windows:
-            bounds = bounds.united(widget.geometry())
-        image = QtGui.QImage(bounds.size(), QtGui.QImage.Format.Format_ARGB32_Premultiplied)
-        image.fill(QtGui.QColor("#000000"))
-        painter = QtGui.QPainter(image)
-        for widget in windows:
-            origin = widget.mapToGlobal(QtCore.QPoint(0, 0)) - bounds.topLeft()
-            if widget.testAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground):
-                painter.setOpacity(widget.windowOpacity())
-                painter.drawPixmap(origin, widget.grab())  # keeps the translucency
-                painter.setOpacity(1.0)
-            else:
-                painter.drawImage(origin, read_back(widget))
-        painter.end()
+        image = capture.compose()
         image.save(str(args.out / f"{name}.png"))
         print(f"  saved {name}.png ({image.width()}x{image.height()})", flush=True)
 

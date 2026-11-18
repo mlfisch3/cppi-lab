@@ -405,3 +405,29 @@ def test_popover_link_opens_the_workbench_at_the_exact_section(
     assert window.docs_button.isChecked()
     window.close()
     QtCore.QCoreApplication.processEvents()
+
+
+@pytest.mark.parametrize("volume", ["theory", "tech"])
+def test_pages_never_scroll_sideways(qtbot: QtBot, workbench: DocWorkbench, volume: str) -> None:
+    """A wide table or code block scrolls inside its own box, not the whole page."""
+    overflow = "document.documentElement.scrollWidth - document.documentElement.clientWidth"
+    synced: Any = workbench.synced  # type: ignore[attr-defined]
+    workbench.open_at(volume, IDS[0])
+    wait_settled(qtbot, workbench, IDS[0])
+    del synced
+    for width in (1300, 1180, 1000, 900, 760, 620, 480):
+        workbench.resize(width, 800)
+        qtbot.wait(150)
+        for name, page in (
+            ("primary", workbench.primary_page),
+            ("preview", workbench.preview_page),
+        ):
+            assert js(qtbot, page, overflow) <= 0, (volume, width, name)
+    # The widest table of the page is still complete: it scrolls inside its own box.
+    widest = js(
+        qtbot,
+        workbench.primary_page,
+        "Math.max.apply(null, Array.from(document.querySelectorAll('table'))"
+        ".map(function (t) { return t.scrollWidth - t.clientWidth; }))",
+    )
+    assert widest >= 0

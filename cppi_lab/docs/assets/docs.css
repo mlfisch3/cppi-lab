@@ -63,7 +63,10 @@ pre code { background: none; border: none; padding: 0; color: inherit; }
 .box.proof { border-left-color: var(--theory); }
 .box > :first-child { margin-top: 0; } .box > :last-child { margin-bottom: 0; }
 .box b.tag { display: block; font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
-table { border-collapse: collapse; margin: 12px 0; font-size: 13px; width: 100%; }
+/* A table wider than the column scrolls inside its own box instead of making the
+   whole page scroll sideways; the rows still stretch to the full width. */
+table { display: block; max-width: 100%; overflow-x: auto; margin: 12px 0; font-size: 13px; }
+table > tbody, table > thead { display: table; width: 100%; border-collapse: collapse; }
 th, td { border: 1px solid var(--border); padding: 5px 9px; text-align: left; vertical-align: top; }
 th { background: var(--panel); color: var(--muted); font-size: 11px; letter-spacing: 0.6px; text-transform: uppercase; }
 td code { white-space: nowrap; }
@@ -80,9 +83,9 @@ hr { border: none; border-top: 1px solid var(--grid); margin: 26px 0; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: #2A3549; border-radius: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-corner { background: transparent; }
 @media (max-width: 720px) {
   html, body { overflow-x: hidden; }
-  table { display: block; overflow-x: auto; }
   #toc { display: none; }
   main { margin-left: 0; padding: 16px 16px 90px 22px; }
   h1 { font-size: 20px; } section h2 { font-size: 16.5px; }

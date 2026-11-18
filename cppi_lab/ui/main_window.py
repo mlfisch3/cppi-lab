@@ -19,6 +19,7 @@ toolbar menu, to dock left, right or bottom.
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
@@ -44,16 +45,25 @@ from cppi_lab.data.loader import (
 )
 from cppi_lab.engine.controller import RunOutput, SimulationController
 from cppi_lab.engine.monte_carlo import EnsembleResult, run_ensemble
-from cppi_lab.ui import x11
+from cppi_lab.ui import theme, x11
 from cppi_lab.ui.chart_workspace import ChartWorkspace
 from cppi_lab.ui.control_sidebar import ControlSidebar
 from cppi_lab.ui.doc_scheme import DocRegistry, load_registry
 from cppi_lab.ui.kpi_ribbon import KpiRibbon, compute_kpis
 from cppi_lab.ui.ledger_window import LedgerWidget
 from cppi_lab.ui.popover_manager import RichPopoverManager
-from cppi_lab.ui.widgets import ElasticComboBox, ElidedLabel, ResizeGrips, TitleBarPressFix
+from cppi_lab.ui.widgets import (
+    AdaptiveLabel,
+    ElasticComboBox,
+    ResizeGrips,
+    ResizeWatcher,
+    TitleBarPressFix,
+)
 
 TOP_BAR_HEIGHT = 38
+#: Narrowest the two selectors of the top bar are made to keep the status read-out legible.
+SCENARIO_MIN_WIDTH = 130
+DATASET_MIN_WIDTH = 170
 
 
 def floating_window_flags(platform_name: str) -> QtCore.Qt.WindowType:
@@ -73,6 +83,10 @@ def floating_window_flags(platform_name: str) -> QtCore.Qt.WindowType:
         | flag.WindowMinimizeButtonHint
         | flag.WindowMaximizeButtonHint
     )
+
+
+#: A duration as the status read-out prints it ("12.3").
+_TIMING = re.compile(r"\d+\.\d")
 
 
 def _ms(year: int, month: int, day: int) -> int:
@@ -337,9 +351,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.norm_chip.setFixedHeight(20)
         self.norm_chip.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.norm_chip.hide()
-        self.status_chip = ElidedLabel("", bar)
+        self.status_chip = AdaptiveLabel(bar)
         self.status_chip.setObjectName("statusChip")
-        # The read-out gives way first when the window is narrow.
+        # The read-out takes what the selectors leave; _fit_top_bar decides how much that is.
+        self._status_widths: list[int] = []
         self.status_chip.setMinimumWidth(0)
         self.status_chip.setSizePolicy(
             QtWidgets.QSizePolicy.Policy.Ignored, QtWidgets.QSizePolicy.Policy.Preferred
@@ -366,6 +381,10 @@ class MainWindow(QtWidgets.QMainWindow):
         row.addSpacing(6)
         row.addWidget(self.ledger_button)
         row.addWidget(self.docs_button)
+        self._top_bar = bar
+        self._top_row = row
+        self._top_bar_watcher = ResizeWatcher(bar)
+        self._top_bar_watcher.resized.connect(self._fit_top_bar)
 
         self.sidebar = ControlSidebar(self.workbench)
         self.sidebar.paramChanged.connect(self._on_param_changed)
@@ -605,7 +624,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # creates and destroys; without a reference of our own their Python
         # side (and with it their behaviour) can be collected while the window
         # is still there.
-        grips = ResizeGrips(container)
+        grips = ResizeGrips(container, QtGui.QColor(theme.FLOAT_BORDER))
         self._floating_grips.add(grips)
         container.destroyed.connect(partial(self._floating_grips.discard, grips))
         bar = container.titleBarWidget()
@@ -783,14 +802,68 @@ class MainWindow(QtWidgets.QMainWindow):
         self.recalculated.emit(run)
         return run
 
+    def _fit_top_bar(self) -> None:
+        """Share the top bar between the two selectors and the status read-out.
+
+        The read-out has four wordings, from every timing down to the bar
+        count alone.  It gets the longest one for which there is room once
+        the scenario selector has given up what it can spare, so it is never
+        left with a fragment of a word; the dataset selector keeps its full
+        name unless the window is too narrow even for the bar count.
+        """
+        dataset, scenario = self.dataset_combo, self.scenario_combo
+        # What the three share: the bar less everything else in it.  The layout's
+        # minimum is exactly that "everything else" plus the minimum widths of
+        # the two selectors (the read-out's own minimum is zero).
+        self._top_row.invalidate()
+        others = (
+            self._top_row.minimumSize().width()
+            - dataset.minimumSizeHint().width()
+            - scenario.minimumSizeHint().width()
+        )
+        available = self._top_bar.width() - others
+        natural_dataset = dataset.sizeHint().width()
+        natural_scenario = scenario.sizeHint().width()
+        least_dataset = min(natural_dataset, DATASET_MIN_WIDTH)
+        least_scenario = min(natural_scenario, SCENARIO_MIN_WIDTH)
+        # The dataset name is worth more than a longer read-out: the read-out is
+        # shortened first, and the dataset selector gives way only when even the
+        # bar count alone would not fit beside it.
+        beside_full_name = available - natural_dataset - least_scenario
+        most = available - least_dataset - least_scenario
+        target = next(
+            (width for width in self._status_widths if width <= beside_full_name),
+            min(self._status_widths[-1], max(0, most)) if self._status_widths else 0,
+        )
+        for_scenario = min(
+            natural_scenario, max(least_scenario, available - natural_dataset - target)
+        )
+        for_dataset = min(natural_dataset, max(least_dataset, available - for_scenario - target))
+        if dataset.maximumWidth() != for_dataset:
+            dataset.setMaximumWidth(for_dataset)
+        if scenario.maximumWidth() != for_scenario:
+            scenario.setMaximumWidth(for_scenario)
+
     def _update_status(self, run: RunOutput) -> None:
         params = run.params
         timings = run.timings
-        self.status_chip.setText(
-            f"{run.window.n:,} bars · recalc {timings.total_ms:.1f} ms "
-            f"(signals {timings.signals_ms:.1f} · kernel {timings.kernel_ms:.1f}) · "
-            f"refresh {self._last_render_ms:.1f} ms"
+        bars = f"{run.window.n:,} bars"
+        recalc = f"recalc {timings.total_ms:.1f} ms"
+        refresh = f"refresh {self._last_render_ms:.1f} ms"
+        self.status_chip.set_wordings(
+            f"{bars} · {recalc} (signals {timings.signals_ms:.1f} · "
+            f"kernel {timings.kernel_ms:.1f}) · {refresh}",
+            f"{bars} · {recalc} · {refresh}",
+            f"{bars} · {recalc}",
+            bars,
         )
+        # Room each wording needs.  The timings are measured as three-digit values
+        # so the bar does not re-flow whenever one of them gains or loses a digit.
+        metrics = self.status_chip.fontMetrics()
+        self._status_widths = [
+            metrics.horizontalAdvance(_TIMING.sub("888.8", text)) + 8
+            for text in self.status_chip.wordings()
+        ]
         if params.normalize:
             self.norm_chip.setText(f"RESCALED ×{run.window.price_scale:.4f}")
             self.norm_chip.setToolTip(
@@ -801,6 +874,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.norm_chip.show()
         else:
             self.norm_chip.hide()
+        self._fit_top_bar()
 
     def _request_ensemble(self) -> None:
         if not self._async_ensemble:

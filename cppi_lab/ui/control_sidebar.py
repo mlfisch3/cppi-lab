@@ -31,7 +31,10 @@ from cppi_lab.ui.popover_manager import HelpBadge
 SIDEBAR_WIDTH = 468
 ROW_HEIGHT = 25
 GROUP_HEADER_HEIGHT = 21
-_LABEL_WIDTH = 246
+#: Width of the scrollbar gutter that is always kept free at the right of the rows.
+SCROLL_GUTTER = 10
+#: Room for the longest caption with its symbol ("Momentum vs. Imbalance Weight w_m,d").
+_LABEL_WIDTH = 228
 _SPIN_WIDTH = 92
 _SLIDER_WIDTH = 70
 _DATETIME_WIDTH = 124
@@ -168,8 +171,11 @@ class ParamRow(QtWidgets.QWidget):
         name_holder.setLayout(name_box)
         name_holder.setFixedWidth(_LABEL_WIDTH)
 
+        # 10 + 228 + 14 + 70 + 92 + 16 + 4 and five gaps of 5 make 454: the sidebar
+        # width less its border, the scrollbar gutter and the style's gap beside
+        # it, so a row is never wider than the viewport it scrolls in.
         layout = QtWidgets.QHBoxLayout(self)
-        layout.setContentsMargins(10, 0, 8, 0)
+        layout.setContentsMargins(10, 0, 4, 0)
         layout.setSpacing(5)
         layout.addWidget(name_holder)
         layout.addWidget(self.badge)
@@ -373,6 +379,14 @@ class ControlSidebar(QtWidgets.QWidget):
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         self.scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # The gutter is reserved whether or not there is anything to scroll (the
+        # empty track has the panel colour), so the scrollbar that appears on a
+        # short screen never covers or shifts the reset buttons.
+        self.scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        scrollbar = self.scroll_area.verticalScrollBar()
+        scrollbar.setFixedWidth(SCROLL_GUTTER)
+        scrollbar.rangeChanged.connect(lambda low, high: scrollbar.setEnabled(high > low))
+        scrollbar.setEnabled(scrollbar.maximum() > scrollbar.minimum())
 
         footer = QtWidgets.QWidget(self)
         footer.setObjectName("sidebarFooter")
@@ -454,6 +468,10 @@ class ControlSidebar(QtWidgets.QWidget):
     def required_height(self) -> int:
         """Height at which the whole column is visible without scrolling."""
         return self.body.sizeHint().height() + self.reset_all_button.sizeHint().height() + 14
+
+    def scrolls(self) -> bool:
+        """Whether the column is taller than the room it has (short screens only)."""
+        return self.scroll_area.verticalScrollBar().maximum() > 0
 
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
         super().keyPressEvent(event)

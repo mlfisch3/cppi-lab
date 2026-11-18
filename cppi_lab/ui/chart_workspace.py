@@ -381,6 +381,10 @@ class ChartWorkspace(QtWidgets.QWidget):
         # The value ranges are set by _auto_range from the layers in view.
         view.enableAutoRange(enable=False)
         plot.getAxis("left").setWidth(AXIS_WIDTH)
+        # pyqtgraph shows every axis item it is handed; the top and right ones are
+        # only replaced so that they stop tracking the view range.
+        plot.hideAxis("top")
+        plot.hideAxis("right")
         if row < 2:
             plot.hideAxis("bottom")  # the three panes share the time axis of the last one
         else:
@@ -859,7 +863,7 @@ class ChartWorkspace(QtWidgets.QWidget):
                         1.6,
                     )
                     if index == 0:
-                        self._add_badges(frame, atlas, clip, pane, lo, hi)
+                        self._place_badges(atlas, pane, lo, hi)
 
         # Axes are drawn outside the clip rectangles of the panes.
         ascent = atlas.ascent(self._font_tick)
@@ -880,6 +884,8 @@ class ChartWorkspace(QtWidgets.QWidget):
                 grid_rgba,
             )
             labels: list[tuple[str, float, float]] = []
+            taken: list[float] = []  # baselines of the labels already placed
+            clearance = text_height + 2.0
             stacked = 0.0
             for level, (spacing, values, _) in enumerate(self._value_ticks(index, pane)):
                 if values.shape[0] == 0:
@@ -892,10 +898,18 @@ class ChartWorkspace(QtWidgets.QWidget):
                         break
                 x = pane.left - TICK_TEXT_GAP
                 shift = dy + 0.5 * (ascent - descent)
-                labels.extend(
-                    (value_tick_label(value, spacing), x, value * m22 + shift)
-                    for value in values.tolist()
-                )
+                # On a short pane even the major ticks are closer together than a
+                # line of text is high: label every k-th one, counted from zero so
+                # the labelled values stay round.
+                stride = max(1, math.ceil(clearance / (spacing * abs(m22))))
+                for value in values.tolist():
+                    if stride > 1 and round(value / spacing) % stride:
+                        continue
+                    baseline = value * m22 + shift
+                    if any(abs(baseline - other) < clearance for other in taken):
+                        continue
+                    taken.append(baseline)
+                    labels.append((value_tick_label(value, spacing), x, baseline))
             frame.add_texts("tick-y", -1, atlas, self._font_tick, labels, text_rgba, align=1.0)
         last = panes[2]
         if last.drawable:
@@ -924,24 +938,21 @@ class ChartWorkspace(QtWidgets.QWidget):
             return "GAP LIQUIDATION" if gap else "LIQUIDATION"
         return f"LIQUIDATION ×{count}" + (" · GAP" if gap else "")
 
-    def _add_badges(
-        self, frame: Frame, atlas: SpriteAtlas, clip: int, pane: Pane, lo: int, hi: int
-    ) -> None:
-        """Label the liquidations in view, one badge per cluster of nearby flashes.
+    def _place_badges(self, atlas: SpriteAtlas, pane: Pane, lo: int, hi: int) -> None:
+        """Decide where the liquidation labels of the view go, one per cluster of flashes.
 
         Liquidations whose flash lines would fall inside one label are counted
         on that label instead of stacking unreadable ones on top of each other.
-        Badges are opaque and drawn after every flash line, so no line can
-        strike through a label; a badge that would leave the pane on the right
-        is placed to the left of its line.
+        A label that would leave the pane on the right is placed to the left of
+        its line, and one that would then collide moves to a second row.  The
+        labels are drawn with the overlay, after every flash and crosshair line,
+        so no line can strike through one.
         """
         font = self._font_badge
         m11, dx, _, _ = pane.transform
         px = self.liquidation_x[lo:hi] * m11 + dx
         gaps = self._liquidation_gap[lo:hi]
         height = atlas.ascent(font) + atlas.descent(font) + 2.0 * BADGE_PAD_Y
-        fill = premultiplied(pg.mkColor(theme.LIQUIDATION))
-        ink = premultiplied(pg.mkColor(theme.CANVAS))
         row_ends: list[float] = []  # right edge of the last badge placed on each row
         start = 0
         total = px.shape[0]
@@ -967,17 +978,6 @@ class ChartWorkspace(QtWidgets.QWidget):
             else:
                 row_ends[row] = x + width
             y = pane.top + 1.0 + row * (height + 2.0)
-            frame.add_rect("badge", clip, x, y, width, height, fill)
-            frame.add_text(
-                "badge-text",
-                clip,
-                atlas,
-                font,
-                text,
-                x + BADGE_PAD_X,
-                y + BADGE_PAD_Y + atlas.ascent(font),
-                ink,
-            )
             self.badges.append(Badge(x, y, width, height, text, count))
             start = stop
 
@@ -1025,6 +1025,22 @@ class ChartWorkspace(QtWidgets.QWidget):
                     1.0,
                     HOVER_DASH,
                 )
+        if self.badges and panes[0].drawable:
+            first = panes[0]
+            clip = frame.clip(first.left, first.top, first.width, first.height)
+            fill = premultiplied(pg.mkColor(theme.LIQUIDATION))
+            ink = premultiplied(pg.mkColor(theme.CANVAS))
+            rise = BADGE_PAD_Y + atlas.ascent(self._font_badge)
+            for badge in self.badges:
+                frame.add_rect("badge", clip, badge.x, badge.y, badge.width, badge.height, fill)
+            frame.add_texts(
+                "badge-text",
+                clip,
+                atlas,
+                self._font_badge,
+                [(badge.text, badge.x + BADGE_PAD_X, badge.y + rise) for badge in self.badges],
+                ink,
+            )
         font = self._font_readout
         centre = 0.5 * (HEADER_HEIGHT + atlas.ascent(font) - atlas.descent(font))
         for index, pane in enumerate(panes):
