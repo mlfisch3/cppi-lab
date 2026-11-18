@@ -81,6 +81,8 @@ hr { border: none; border-top: 1px solid var(--grid); margin: 26px 0; }
 ::-webkit-scrollbar-thumb { background: #2A3549; border-radius: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 @media (max-width: 720px) {
+  html, body { overflow-x: hidden; }
+  table { display: block; overflow-x: auto; }
   #toc { display: none; }
   main { margin-left: 0; padding: 16px 16px 90px 22px; }
   h1 { font-size: 20px; } section h2 { font-size: 16.5px; }

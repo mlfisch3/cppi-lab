@@ -252,7 +252,10 @@ def test_markers_are_lossless(chart: ChartWorkspace, run: RunOutput) -> None:
     assert len(chart.draw_hit.getData()[0]) + len(chart.draw_miss.getData()[0]) == attempts
     assert len(chart.draw_hit.getData()[0]) == stats.maker_fills
     liquidations = int(np.count_nonzero(flags & event_bit(7)))
-    assert len(chart._liquidation_lines) == 3 * liquidations  # one flash line per pane
+    assert len(chart.liquidation_lines) == 3  # a full-height flash line in every pane
+    for layer in chart.liquidation_lines:
+        assert layer._x.shape[0] == liquidations
+        assert layer.color.name().upper() == "#EF4444"
     assert len(chart._liquidation_badges) == liquidations
     assert not chart.banner.isVisible()
 
@@ -357,6 +360,9 @@ def test_ribbon_and_segment_tessellation() -> None:
     np.testing.assert_allclose(strip[2, :2], [8.0, 2.0], atol=1e-6)  # mitred right angle
     np.testing.assert_allclose(strip[3, :2], [12.0, -2.0], atol=1e-6)
     assert ribbon_strip(px[:1], py[:1], 2.0).shape == (0, 3)
+    # Repeated points (flat stretches of a step line) are dropped, not turned into spikes.
+    doubled = ribbon_strip(np.repeat(px, 2), np.repeat(py, 2), 2.0)
+    np.testing.assert_array_equal(doubled, strip)
     quads = segment_quads(np.array([0.0]), np.array([0.0]), np.array([0.0]), np.array([8.0]), 1.0)
     assert quads.shape == (6, 3)
     assert set(np.round(quads[:, 0], 6)) == {-1.0, 1.0}

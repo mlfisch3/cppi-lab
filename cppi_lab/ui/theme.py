@@ -165,6 +165,8 @@ QCheckBox::indicator:checked {{ background: {ACCENT}; border-color: {ACCENT}; }}
     color: {TEXT_MUTED}; font-size: 9px; font-weight: 700; letter-spacing: 0.9px;
 }}
 #kpiValue {{ font-family: {MONO_FAMILY}; font-size: 15px; font-weight: 700; color: {TEXT}; }}
+#kpiValue[compact="true"] {{ font-size: 12px; }}
+#kpiSub[compact="true"] {{ font-size: 9px; }}
 #kpiValue[tone="good"] {{ color: {GOOD}; }}
 #kpiValue[tone="warn"] {{ color: {WARN}; }}
 #kpiValue[tone="bad"] {{ color: {BAD}; }}

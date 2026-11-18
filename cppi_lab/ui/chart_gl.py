@@ -23,6 +23,7 @@ tests, image export) the same geometry is drawn with ``QPainter``.
 
 from __future__ import annotations
 
+import math
 from typing import Any, Literal
 
 import numpy as np
@@ -35,7 +36,7 @@ from PySide6 import QtCore, QtGui, QtOpenGL, QtWidgets
 
 FloatArray = NDArray[np.float64]
 
-LayerKind = Literal["line", "step", "band", "segments", "stems"]
+LayerKind = Literal["line", "step", "band", "segments", "stems", "vlines"]
 ReduceMode = Literal["extreme", "mean"]
 
 _PROGRAM_KEY = "CppiLabLayer"
@@ -44,7 +45,13 @@ _AA_MARGIN = 0.75
 #: Width in pixels of one averaging bucket of a ``reduce="mean"`` layer.
 MEAN_PIXELS = 3
 #: Mitre length is capped at this multiple of the half width at sharp turns.
-_MITRE_LIMIT = 2.0
+MITRE_LIMIT = 2.0
+#: Block size of the coarse level used when very many bars share one pixel.
+COARSE_BLOCK = 64
+#: Layers shorter than this never need the coarse level.
+COARSE_MIN_BARS = 131_072
+#: Every vertical grid line is drawn across the whole pane.
+_EVERYWHERE = (-1e13, -1e13, 2e13, 2e13)
 
 _VERT_LEGACY = """
 attribute vec2 a_position;
@@ -234,6 +241,68 @@ def band_mean_decimate(
 
 
 @njit(cache=True, nogil=True)
+def coarse_level(
+    x: FloatArray, y: FloatArray, block: int
+) -> tuple[FloatArray, FloatArray, FloatArray, FloatArray]:
+    """Per-block ``(x_start, min, max, mean)`` of ``y``; the last block may be short."""
+    n = x.shape[0]
+    count = (n + block - 1) // block
+    bx = np.empty(count, dtype=np.float64)
+    lo = np.empty(count, dtype=np.float64)
+    hi = np.empty(count, dtype=np.float64)
+    mean = np.empty(count, dtype=np.float64)
+    for b in range(count):
+        start = b * block
+        stop = min(n, start + block)
+        low = y[start]
+        high = y[start]
+        acc = 0.0
+        for i in range(start, stop):
+            v = y[i]
+            if v < low:
+                low = v
+            if v > high:
+                high = v
+            acc += v
+        bx[b] = x[start]
+        lo[b] = low
+        hi[b] = high
+        mean[b] = acc / (stop - start)
+    return bx, lo, hi, mean
+
+
+@njit(cache=True, nogil=True)
+def envelope_decimate(
+    x: FloatArray, y_min: FloatArray, y_max: FloatArray, lo: int, hi: int, buckets: int
+) -> tuple[FloatArray, FloatArray]:
+    """Min/max polyline from pre-reduced ``(min, max)`` blocks (see :func:`coarse_level`)."""
+    count = hi - lo
+    out_x = np.empty(2 * buckets, dtype=np.float64)
+    out_y = np.empty(2 * buckets, dtype=np.float64)
+    filled = 0
+    for b in range(buckets):
+        start = lo + (b * count) // buckets
+        stop = lo + ((b + 1) * count) // buckets
+        if stop <= start:
+            continue
+        low = y_min[start]
+        high = y_max[start]
+        for i in range(start + 1, stop):
+            if y_min[i] < low:
+                low = y_min[i]
+            if y_max[i] > high:
+                high = y_max[i]
+        out_x[filled] = x[start]
+        out_y[filled] = low
+        filled += 1
+        if high != low:
+            out_x[filled] = x[start + (stop - start) // 2]
+            out_y[filled] = high
+            filled += 1
+    return out_x[:filled], out_y[:filled]
+
+
+@njit(cache=True, nogil=True)
 def finite_min_max(y: FloatArray, lo: int, hi: int) -> tuple[float, float]:
     """Finite minimum and maximum of ``y[lo:hi]`` (``nan, nan`` if none)."""
     low = np.inf
@@ -255,47 +324,67 @@ def finite_min_max(y: FloatArray, lo: int, hi: int) -> tuple[float, float]:
 # --------------------------------------------------------------------------
 
 
+@njit(cache=True, nogil=True)
 def ribbon_strip(px: FloatArray, py: FloatArray, half: float) -> NDArray[np.float32]:
     """Triangle strip of a mitred ribbon of half width ``half`` around a polyline.
 
     Returns ``(2 * n, 3)`` float32 rows ``(x, y, across)`` where ``across`` is
-    the signed pixel distance from the centre line.
+    the signed pixel distance from the centre line.  Repeated points (a flat
+    stretch of a step line produces one per bar) are dropped first: a
+    zero-length segment has no direction and would leave a spike.
     """
-    n = px.shape[0]
+    total = px.shape[0]
+    xs = np.empty(total, dtype=np.float64)
+    ys = np.empty(total, dtype=np.float64)
+    n = 0
+    for i in range(total):
+        if n == 0 or abs(px[i] - xs[n - 1]) + abs(py[i] - ys[n - 1]) > 1e-6:
+            xs[n] = px[i]
+            ys[n] = py[i]
+            n += 1
+    out = np.empty((2 * n if n >= 2 else 0, 3), dtype=np.float32)
     if n < 2:
-        return np.empty((0, 3), dtype=np.float32)
-    dx = np.diff(px)
-    dy = np.diff(py)
-    length = np.hypot(dx, dy)
-    length[length < 1e-9] = 1e-9
-    nx = -dy / length
-    ny = dx / length
-    # Vertex normal = normalised sum of the adjacent segment normals.
-    vx = np.empty(n)
-    vy = np.empty(n)
-    vx[0], vy[0] = nx[0], ny[0]
-    vx[-1], vy[-1] = nx[-1], ny[-1]
-    vx[1:-1] = nx[:-1] + nx[1:]
-    vy[1:-1] = ny[:-1] + ny[1:]
-    norm = np.hypot(vx, vy)
-    degenerate = norm < 1e-6
-    norm[degenerate] = 1.0
-    vx /= norm
-    vy /= norm
-    vx[degenerate] = np.concatenate(([nx[0]], nx))[degenerate]
-    vy[degenerate] = np.concatenate(([ny[0]], ny))[degenerate]
-    # Mitre scale 1 / cos(theta / 2), capped at sharp reversals.
-    ref_x = np.concatenate(([nx[0]], nx))
-    ref_y = np.concatenate(([ny[0]], ny))
-    cos_half = np.abs(vx * ref_x + vy * ref_y)
-    scale = half / np.maximum(cos_half, 1.0 / _MITRE_LIMIT)
-    out = np.empty((2 * n, 3), dtype=np.float32)
-    out[0::2, 0] = px + vx * scale
-    out[0::2, 1] = py + vy * scale
-    out[0::2, 2] = half
-    out[1::2, 0] = px - vx * scale
-    out[1::2, 1] = py - vy * scale
-    out[1::2, 2] = -half
+        return out
+    prev_nx = 0.0
+    prev_ny = 0.0
+    for i in range(n):
+        if i < n - 1:
+            dx = xs[i + 1] - xs[i]
+            dy = ys[i + 1] - ys[i]
+            length = math.sqrt(dx * dx + dy * dy)
+            if length < 1e-9:
+                length = 1e-9
+            next_nx = -dy / length
+            next_ny = dx / length
+        else:
+            next_nx = prev_nx
+            next_ny = prev_ny
+        if i == 0:
+            prev_nx = next_nx
+            prev_ny = next_ny
+        # Vertex normal: normalised sum of the adjacent segment normals.
+        vx = prev_nx + next_nx
+        vy = prev_ny + next_ny
+        norm = math.sqrt(vx * vx + vy * vy)
+        if norm < 1e-6:
+            vx = prev_nx
+            vy = prev_ny
+        else:
+            vx /= norm
+            vy /= norm
+        # Mitre scale 1 / cos(theta / 2), capped at sharp reversals.
+        cos_half = abs(vx * prev_nx + vy * prev_ny)
+        if cos_half < 1.0 / MITRE_LIMIT:
+            cos_half = 1.0 / MITRE_LIMIT
+        scale = half / cos_half
+        out[2 * i, 0] = xs[i] + vx * scale
+        out[2 * i, 1] = ys[i] + vy * scale
+        out[2 * i, 2] = half
+        out[2 * i + 1, 0] = xs[i] - vx * scale
+        out[2 * i + 1, 1] = ys[i] - vy * scale
+        out[2 * i + 1, 2] = -half
+        prev_nx = next_nx
+        prev_ny = next_ny
     return out
 
 
@@ -450,6 +539,9 @@ class GLLayerItem(pg.GraphicsObject):
         self._cache_key: tuple[Any, ...] | None = None
         self._vertices: NDArray[np.float32] = np.empty((0, 3), dtype=np.float32)
         self._version = 0
+        self._coarse: tuple[FloatArray, ...] | None = None
+        self._range_key: tuple[int, int, int] | None = None
+        self._range_value: tuple[float, float] | None = None
         self._uploaded: tuple[Any, ...] | None = None
 
     # -- data ------------------------------------------------------------------
@@ -469,6 +561,10 @@ class GLLayerItem(pg.GraphicsObject):
         """Data of a ``stems`` layer: a fixed-pixel stem below each point."""
         self._set(x, y, np.empty(0), np.empty(0))
 
+    def set_vlines(self, x: FloatArray) -> None:
+        """Data of a ``vlines`` layer: full-height vertical lines at ``x``."""
+        self._set(x, np.zeros(len(x)), np.empty(0), np.empty(0))
+
     def clear(self) -> None:
         self._set(np.empty(0), np.empty(0), np.empty(0), np.empty(0))
 
@@ -482,6 +578,16 @@ class GLLayerItem(pg.GraphicsObject):
         self._y = np.ascontiguousarray(y, dtype=np.float64)
         self._y2 = np.ascontiguousarray(y2, dtype=np.float64)
         self._x2 = np.ascontiguousarray(x2, dtype=np.float64)
+        # A second, 64-times coarser level keeps the per-frame cost of a
+        # year-long window independent of its half a million bars.
+        self._coarse = None
+        if self.kind in ("line", "step", "band") and self._x.shape[0] >= COARSE_MIN_BARS:
+            bx, y_min, y_max, y_mean = coarse_level(self._x, self._y, COARSE_BLOCK)
+            if self.kind == "band":
+                _, _y2_min, y2_max, y2_mean = coarse_level(self._x, self._y2, COARSE_BLOCK)
+            else:
+                y2_max = y2_mean = y_mean
+            self._coarse = (bx, y_min, y_max, y_mean, y2_max, y2_mean)
         self._version += 1
         self._cache_key = None
         self.prepareGeometryChange()
@@ -492,6 +598,8 @@ class GLLayerItem(pg.GraphicsObject):
     def _compute_bounds(self) -> QtCore.QRectF:
         if self._x.shape[0] == 0:
             return QtCore.QRectF()
+        if self.kind == "vlines":
+            return QtCore.QRectF(*_EVERYWHERE)
         x_lo, x_hi = float(self._x[0]), float(self._x[-1])
         if self.kind == "segments" and self._x2.shape[0]:
             x_lo = float(min(self._x.min(), self._x2.min()))
@@ -514,7 +622,7 @@ class GLLayerItem(pg.GraphicsObject):
         self, ax: int, frac: float = 1.0, orthoRange: tuple[float, float] | None = None
     ) -> tuple[float, float] | None:
         """Data extent along one axis, optionally limited to an x-range."""
-        if self._x.shape[0] == 0:
+        if self._x.shape[0] == 0 or self.kind == "vlines":
             return None
         if ax == 0:
             return self._bounds.left(), self._bounds.right()
@@ -526,13 +634,27 @@ class GLLayerItem(pg.GraphicsObject):
             hi = min(hi, int(np.searchsorted(self._x, orthoRange[1], side="right")) + 1)
             if hi <= lo:
                 return None
-        y_lo, y_hi = finite_min_max(self._y, lo, hi)
-        if self._y2.shape[0]:
-            lo2, hi2 = finite_min_max(self._y2, lo, hi)
-            y_lo, y_hi = np.nanmin([y_lo, lo2]), np.nanmax([y_hi, hi2])
-        if not (np.isfinite(y_lo) and np.isfinite(y_hi)):
-            return None
-        return float(y_lo), float(y_hi)
+        # Auto-ranging asks for this on every frame, including frames in which
+        # only the crosshair moved; remember the answer for the visible range.
+        key = (self._version, lo, hi)
+        if key == self._range_key:
+            return self._range_value
+        coarse = self._coarse
+        if coarse is not None and hi - lo >= 8 * COARSE_BLOCK:
+            _, y_min, y_max, _, y2_max, _ = coarse
+            lo_b = lo // COARSE_BLOCK
+            hi_b = min(y_min.shape[0], (hi + COARSE_BLOCK - 1) // COARSE_BLOCK)
+            y_lo, _ = finite_min_max(y_min, lo_b, hi_b)
+            _, y_hi = finite_min_max(y2_max if self.kind == "band" else y_max, lo_b, hi_b)
+        else:
+            y_lo, y_hi = finite_min_max(self._y, lo, hi)
+            if self._y2.shape[0]:
+                lo2, hi2 = finite_min_max(self._y2, lo, hi)
+                y_lo, y_hi = np.nanmin([y_lo, lo2]), np.nanmax([y_hi, hi2])
+        value = (float(y_lo), float(y_hi)) if np.isfinite(y_lo) and np.isfinite(y_hi) else None
+        self._range_key = key
+        self._range_value = value
+        return value
 
     def pixelPadding(self) -> float:
         return self.width
@@ -562,9 +684,36 @@ class GLLayerItem(pg.GraphicsObject):
             px = self._x * m11 + dx
             py = self._y * m22 + dy
             return segment_quads(px, py, px, py + self.stem_px, half)
+        if kind == "vlines":
+            px = np.round(self._x * m11 + dx) + 0.5  # centred on a pixel: a crisp 1 px line
+            area = view.sceneBoundingRect()
+            top = np.full(px.shape[0], area.top())
+            return segment_quads(px, top, px, np.full(px.shape[0], area.bottom()), half)
         lo, hi, pixels = self._visible(view)
         if hi - lo < 2:
             return np.empty((0, 3), dtype=np.float32)
+        coarse = self._coarse
+        if coarse is not None and hi - lo >= 4 * COARSE_BLOCK * pixels:
+            bx, y_min, y_max, y_mean, y2_max, y2_mean = coarse
+            lo_b, hi_b = (
+                lo // COARSE_BLOCK,
+                min(bx.shape[0], (hi + COARSE_BLOCK - 1) // COARSE_BLOCK),
+            )
+            mean_buckets = max(48, pixels // MEAN_PIXELS)
+            if kind == "band":
+                if self.reduce == "mean":
+                    x, y_low, y_high = band_mean_decimate(
+                        bx, y_mean, y2_mean, lo_b, hi_b, mean_buckets
+                    )
+                else:
+                    x, y_low, y_high = band_decimate(bx, y_min, y2_max, lo_b, hi_b, pixels)
+                return band_strip(x * m11 + dx, y_low * m22 + dy, y_high * m22 + dy)
+            if self.reduce == "mean":
+                x, y = mean_decimate(bx, y_mean, lo_b, hi_b, mean_buckets)
+            else:
+                x, y = envelope_decimate(bx, y_min, y_max, lo_b, hi_b, pixels)
+            coarse_strip: NDArray[np.float32] = ribbon_strip(x * m11 + dx, y * m22 + dy, half)
+            return coarse_strip
         if kind == "band":
             if self.reduce == "mean":
                 x, y_low, y_high = band_mean_decimate(
@@ -579,11 +728,20 @@ class GLLayerItem(pg.GraphicsObject):
             x, y = minmax_decimate(self._x, self._y, lo, hi, pixels)
         if kind == "step" and hi - lo <= 2 * pixels:
             x, y = step_points(x, y)
-        return ribbon_strip(x * m11 + dx, y * m22 + dy, half)
+        strip: NDArray[np.float32] = ribbon_strip(x * m11 + dx, y * m22 + dy, half)
+        return strip
 
     def _geometry(self, view: pg.ViewBox) -> NDArray[np.float32]:
         tr = self.sceneTransform()
-        key = (self._version, tr.m11(), tr.m22(), tr.dx(), tr.dy(), int(view.width()))
+        key = (
+            self._version,
+            tr.m11(),
+            tr.m22(),
+            tr.dx(),
+            tr.dy(),
+            int(view.width()),
+            int(view.height()),
+        )
         if key != self._cache_key:
             self._vertices = self._build(view, tr)
             self._cache_key = key
@@ -650,7 +808,8 @@ class GLLayerItem(pg.GraphicsObject):
         glf.glBlendFuncSeparate(
             GLC.GL_SRC_ALPHA, GLC.GL_ONE_MINUS_SRC_ALPHA, 1, GLC.GL_ONE_MINUS_SRC_ALPHA
         )
-        mode = GLC.GL_TRIANGLES if self.kind in ("segments", "stems") else GLC.GL_TRIANGLE_STRIP
+        separate = self.kind in ("segments", "stems", "vlines")
+        mode = GLC.GL_TRIANGLES if separate else GLC.GL_TRIANGLE_STRIP
         glf.glDrawArrays(mode, 0, vertices.shape[0])
         glf.glDisable(GLC.GL_BLEND)
         glf.glDisable(GLC.GL_SCISSOR_TEST)
@@ -683,7 +842,7 @@ class GLLayerItem(pg.GraphicsObject):
             if self.dash is not None:
                 pen.setDashPattern([self.dash[0] / self.width, self.dash[1] / self.width])
             painter.setPen(pen)
-            if self.kind in ("segments", "stems"):
+            if self.kind in ("segments", "stems", "vlines"):
                 quads = vertices.reshape(-1, 6, 3)
                 start = 0.5 * (quads[:, 0, :2] + quads[:, 1, :2])
                 end = 0.5 * (quads[:, 2, :2] + quads[:, 5, :2])

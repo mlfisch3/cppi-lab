@@ -183,7 +183,7 @@ class RichPopoverWidget(QtWidgets.QFrame):
         view = QWebEngineView(self)
         page = _Page(shared_profile(self._registry), view)
         page.setBackgroundColor(QtGui.QColor(theme.PANEL_RAISED))
-        page.contentsSizeChanged.connect(self._on_contents_size)
+        page.loadFinished.connect(self._measure_soon)
         view.setPage(page)
         view.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
         self._web = view
@@ -205,8 +205,26 @@ class RichPopoverWidget(QtWidgets.QFrame):
         if target is not None:
             self.linkActivated.emit(target[0], target[1])
 
-    def _on_contents_size(self, size: QtCore.QSizeF) -> None:
-        self._set_body_height(int(size.height()) + 2)
+    def _measure_soon(self, ok: bool = True) -> None:
+        """Fit the card to its page; repeat once the web fonts have settled."""
+        if not ok or self._web is None:
+            return
+        self._measure()
+        for delay in (120, 400):
+            QtCore.QTimer.singleShot(delay, self._measure)
+
+    def _measure(self) -> None:
+        if self._web is None or self._web.page() is None:
+            return
+        # The body's own box, not the document height, which never goes below
+        # the viewport and would stop a card from shrinking for shorter content.
+        self._web.page().runJavaScript(
+            "Math.ceil(document.body.getBoundingClientRect().height)", 0, self._apply_measured
+        )
+
+    def _apply_measured(self, height: object) -> None:
+        if isinstance(height, (int, float)) and height > 0:
+            self._set_body_height(int(height) + 2)
 
     def _set_body_height(self, height: int) -> None:
         bounded = max(POPOVER_MIN_BODY, min(POPOVER_MAX_BODY, height))

@@ -15,6 +15,7 @@ and the crosshair read-out.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -47,6 +48,10 @@ AXIS_WIDTH = 66
 #: Markers shrink once more than this many are inside the visible range.
 MARKER_DENSITY_SOFT = 250
 _STEM_PX = 16.0
+#: Liquidation labels closer together than this (in pixels) are merged into the first.
+BADGE_MIN_GAP_PX = 96.0
+#: Badges are labels, not data; the flash lines themselves are never capped.
+MAX_LIQUIDATION_BADGES = 64
 
 
 @dataclass(frozen=True)
@@ -97,11 +102,44 @@ def _legend_html(entries: tuple[LegendEntry, ...]) -> str:
     return "&nbsp;&nbsp;".join(parts)
 
 
+#: Tick spacings, in seconds, tried from the finest to the coarsest.
+_TICK_STEPS: tuple[int, ...] = (
+    60, 120, 300, 600, 900, 1_800, 3_600, 7_200, 10_800, 21_600, 43_200,
+    86_400, 2 * 86_400, 5 * 86_400, 7 * 86_400, 14 * 86_400, 30 * 86_400,
+    61 * 86_400, 91 * 86_400, 182 * 86_400, 365 * 86_400,
+)  # fmt: skip
+#: Minimum distance between two time labels.
+_TICK_MIN_PX = 104.0
+
+
+def time_ticks(x_min: float, x_max: float, width_px: float) -> tuple[int, list[float]]:
+    """Round UTC tick positions for a visible range: ``(step_seconds, values)``."""
+    span = x_max - x_min
+    if span <= 0.0 or width_px <= 0.0:
+        return 0, []
+    target = span * _TICK_MIN_PX / width_px
+    step = next((s for s in _TICK_STEPS if s >= target), _TICK_STEPS[-1])
+    first = math.ceil(x_min / step) * step
+    count = int((x_max - first) // step) + 1
+    return step, [float(first + i * step) for i in range(max(0, count))]
+
+
 class _UtcAxis(pg.DateAxisItem):
-    """Date axis in UTC whose labels always carry enough calendar context."""
+    """Date axis in UTC with a constant-time tick rule and readable labels.
+
+    pyqtgraph's own date ticks cost over a millisecond per axis and frame,
+    which matters at 60 frames per second; a fixed ladder of round spacings
+    does the same job in a few microseconds.
+    """
 
     def __init__(self) -> None:
         super().__init__(orientation="bottom", utcOffset=0)
+
+    def tickValues(
+        self, minVal: float, maxVal: float, size: float
+    ) -> list[tuple[float, list[float]]]:
+        step, values = time_ticks(minVal, maxVal, size)
+        return [(float(step), values)] if values else []
 
     def tickStrings(self, values: list[float], scale: float, spacing: float) -> list[str]:
         labels = []
@@ -115,10 +153,8 @@ class _UtcAxis(pg.DateAxisItem):
                 labels.append(moment.strftime("%b %Y"))
             elif spacing >= 86400 or (moment.hour == 0 and moment.minute == 0):
                 labels.append(moment.strftime("%b %d").replace(" 0", " "))
-            elif spacing >= 60:
-                labels.append(moment.strftime("%H:%M"))
             else:
-                labels.append(moment.strftime("%H:%M:%S"))
+                labels.append(moment.strftime("%H:%M"))
         return labels
 
 
@@ -148,6 +184,20 @@ class PaneHeader(QtWidgets.QWidget):
         layout.addWidget(self.legend)
         layout.addStretch(1)
         layout.addWidget(self.readout)
+
+    def set_readout(self, text: str) -> None:
+        self.readout.setText(text)
+        self.fit()
+
+    def fit(self) -> None:
+        """Show the legend only while it and the read-out both fit on the strip."""
+        fixed = AXIS_WIDTH + 12 + self.title.sizeHint().width() + 60
+        needed = fixed + self.legend.sizeHint().width() + self.readout.sizeHint().width()
+        self.legend.setVisible(needed <= self.width())
+
+    def resizeEvent(self, event: QtGui.QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self.fit()
 
 
 class EmptyStateBanner(QtWidgets.QFrame):
@@ -206,7 +256,7 @@ class ChartWorkspace(QtWidgets.QWidget):
         self._selected_bar = -1
         self._marker_scale = 1.0
         self._pane_heights: list[int] = []
-        self._liquidation_lines: list[pg.InfiniteLine] = []
+        self._grid_ticks: list[float] = []
         self._liquidation_badges: list[pg.TextItem] = []
 
         self.canvas = pg.GraphicsLayoutWidget(self)
@@ -256,7 +306,9 @@ class ChartWorkspace(QtWidgets.QWidget):
         plot.setTitle(None)
         plot.layout.setRowFixedHeight(0, HEADER_HEIGHT)
         plot.layout.setRowMinimumHeight(0, HEADER_HEIGHT)
-        plot.showGrid(x=True, y=True, alpha=1.0)
+        # Horizontal grid lines come from the value axis; vertical ones are a GPU
+        # layer fed from one shared set of time ticks (see _update_time_grid).
+        plot.showGrid(x=False, y=True, alpha=1.0)
         view = plot.getViewBox()
         view.setMouseEnabled(x=True, y=False)
         view.enableAutoRange(axis=pg.ViewBox.YAxis, enable=True)
@@ -273,8 +325,7 @@ class ChartWorkspace(QtWidgets.QWidget):
             axis.setStyle(tickFont=tick_font, tickLength=-4, tickTextOffset=4)
         plot.getAxis("left").setWidth(AXIS_WIDTH)
         if row < 2:
-            plot.getAxis("bottom").setStyle(showValues=False)
-            plot.getAxis("bottom").setHeight(4)
+            plot.hideAxis("bottom")  # the three panes share the time axis of the last one
         else:
             plot.getAxis("bottom").setHeight(22)
         return plot
@@ -312,6 +363,10 @@ class ChartWorkspace(QtWidgets.QWidget):
         return item
 
     def _build_layers(self) -> None:
+        self.time_grid = [self._layer(pane, "vlines", theme.GRID, 1.0, z=-10) for pane in range(3)]
+        self.liquidation_lines = [
+            self._layer(pane, "vlines", theme.LIQUIDATION, 1.6, z=40) for pane in range(3)
+        ]
         # Pane 1 - TSD visual-encoding matrix, back to front.
         self.mc_fan = self._layer(0, "band", theme.MC_FAN, z=1)
         self.price_band = self._layer(0, "band", theme.PRICE_BAND, z=2)
@@ -452,23 +507,16 @@ class ChartWorkspace(QtWidgets.QWidget):
         self.draw_miss.setData(x=ax[~hit], y=au[~hit])
 
     def _set_liquidations(self, run: RunOutput) -> None:
-        for plot, line in self._liquidation_lines_with_plots():
-            plot.removeItem(line)
+        """Full-height flash line in every pane, and a badge, per hard-buffer liquidation."""
         for badge in self._liquidation_badges:
             self.plots[0].removeItem(badge)
-        self._liquidation_lines = []
         self._liquidation_badges = []
-        self._liquidation_owner: list[pg.PlotItem] = []
         bars = np.nonzero(run.result.flags & event_bit(EVENT_HARD_BUFFER_LIQUIDATION))[0]
-        pen = pg.mkPen(theme.LIQUIDATION, width=1.6)
-        for bar in bars[:200]:
+        times = self._x[bars]
+        for layer in self.liquidation_lines:
+            layer.set_vlines(times)
+        for bar in bars[:MAX_LIQUIDATION_BADGES]:
             x = float(self._x[bar])
-            for plot in self.plots:
-                line = pg.InfiniteLine(pos=x, angle=90, movable=False, pen=pen)
-                line.setZValue(40)
-                plot.addItem(line, ignoreBounds=True)
-                self._liquidation_lines.append(line)
-                self._liquidation_owner.append(plot)
             gap = run.result.stats.gap_bar == int(bar)
             badge = pg.TextItem(
                 text="GAP LIQUIDATION" if gap else "LIQUIDATION",
@@ -486,16 +534,20 @@ class ChartWorkspace(QtWidgets.QWidget):
             badge.bar_x = x
         self._position_badges()
 
-    def _liquidation_lines_with_plots(self) -> list[tuple[pg.PlotItem, pg.InfiniteLine]]:
-        owners = getattr(self, "_liquidation_owner", [])
-        return list(zip(owners, self._liquidation_lines, strict=False))
-
     def _position_badges(self) -> None:
         if not self._liquidation_badges:
             return
-        (_, _), (_, y_max) = self.plots[0].getViewBox().viewRange()
+        view = self.plots[0].getViewBox()
+        (x_min, x_max), (_, y_max) = view.viewRange()
+        per_pixel = (x_max - x_min) / max(1.0, view.width())
+        last_shown = -float("inf")
         for badge in self._liquidation_badges:
             badge.setPos(badge.bar_x, y_max)
+            # Liquidations a few bars apart would stack their labels; label the first.
+            crowded = (badge.bar_x - last_shown) < BADGE_MIN_GAP_PX * per_pixel
+            badge.setVisible(not crowded)
+            if not crowded:
+                last_shown = badge.bar_x
 
     def set_ensemble(self, ensemble: EnsembleResult | None) -> None:
         """Show or clear the Monte Carlo 5-95 % equity fan (FR-3.3)."""
@@ -562,8 +614,19 @@ class ChartWorkspace(QtWidgets.QWidget):
         self.set_visible_range(hi - 2.0 * half, hi)
 
     def _on_x_range_changed(self) -> None:
+        self._update_time_grid()
         self._update_marker_density()
         self._position_badges()
+
+    def _update_time_grid(self) -> None:
+        """Vertical grid lines at the time-axis ticks, identical in all three panes."""
+        x0, x1 = self.visible_range()
+        _, ticks = time_ticks(x0, x1, float(self.plots[2].getViewBox().width()))
+        if ticks != self._grid_ticks:
+            self._grid_ticks = ticks
+            values = np.array(ticks, dtype=np.float64)
+            for layer in self.time_grid:
+                layer.set_vlines(values)
 
     def _update_marker_density(self) -> None:
         if self._run is None or self._x.shape[0] == 0:
@@ -615,6 +678,7 @@ class ChartWorkspace(QtWidgets.QWidget):
 
     def _layout_overlays(self) -> None:
         self._apply_pane_heights()
+        self._update_time_grid()
         for plot, header in zip(self.plots, self.headers, strict=True):
             rect = plot.sceneBoundingRect()
             header.setGeometry(int(rect.left()), int(rect.top()), int(rect.width()), HEADER_HEIGHT)
@@ -725,22 +789,20 @@ class ChartWorkspace(QtWidgets.QWidget):
         bar = self._hover_bar if self._hover_bar >= 0 else self._selected_bar
         if run is None or bar < 0 or bar >= run.result.n_bars:
             for header in self.headers:
-                header.readout.setText("")
+                header.set_readout("")
             return
         row = run.result.telemetry[bar]
         stamp = QtCore.QDateTime.fromMSecsSinceEpoch(
             int(row["ts_utc_ms"]), QtCore.QTimeZone.utc()
         ).toString("yyyy-MM-dd HH:mm")
-        self.headers[0].readout.setText(
+        self.headers[0].set_readout(
             f"{stamp} UTC   C {_fmt_usd(row['close'])}   P_floor {_fmt_usd(row['p_floor'])}   "
             f"V/N₀ {_fmt_usd(row['net_equity_usd'] / self._n0)}"
         )
-        self.headers[1].readout.setText(
+        self.headers[1].set_readout(
             f"n {row['btc_held']:.4f}   ceil {row['n_ceil']:.4f}   floor {row['n_rebuy']:.4f}   "
             f"max {row['n_max']:.4f}   d {row['d_norm']:.3f}"
         )
         fill = row["p_fill_prob"]
         attempt = f"   P_fill {fill:.3f} vs U {row['u_rand_draw']:.3f}" if fill == fill else ""
-        self.headers[2].readout.setText(
-            f"S_down {row['s_down']:.3f}   S_up {row['s_up']:.3f}{attempt}"
-        )
+        self.headers[2].set_readout(f"S_down {row['s_down']:.3f}   S_up {row['s_up']:.3f}{attempt}")

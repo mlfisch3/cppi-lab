@@ -204,7 +204,7 @@ def test_monte_carlo_fan_toggle(qtbot: QtBot, window: MainWindow) -> None:
     assert window.ensemble is not None
     assert window.ensemble.members == 100
     assert window.chart.mc_fan._x.shape[0] == 43_200
-    assert "MC 100 seeds" in window.kpis.cards["floor"].subtitle.text()
+    assert window.kpis.cards["floor"].subtitle.text().startswith("MC 0 breaches")
     with qtbot.waitSignal(window.recalculated, timeout=10_000):
         window.sidebar.rows["mc_fan"].toggle.click()  # type: ignore[union-attr]
     assert window.chart.mc_fan._x.shape[0] == 0

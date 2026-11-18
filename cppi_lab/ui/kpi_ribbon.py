@@ -10,13 +10,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from cppi_lab.engine.controller import RunOutput
 from cppi_lab.engine.monte_carlo import EnsembleResult
 from cppi_lab.ui.popover_manager import HelpBadge
 
 RIBBON_HEIGHT = 64
+#: Cards narrower than this switch to short captions and a smaller value font.
+COMPACT_BELOW_PX = 168
 Tone = Literal["", "good", "warn", "bad"]
 
 
@@ -25,17 +27,19 @@ class KpiSpec:
     key: str
     title: str
     popover: str
+    #: Caption used when the card is too narrow for the full one.
+    short: str = ""
 
 
 KPI_SPECS: tuple[KpiSpec, ...] = (
-    KpiSpec("equity", "NET EQUITY&nbsp; V<sub>T</sub>", "kpi-equity"),
-    KpiSpec("cushion", "CUSHION&nbsp; V<sub>T</sub> − F", "kpi-cushion"),
-    KpiSpec("floor", "FLOOR INTEGRITY", "kpi-floor"),
-    KpiSpec("holdings", "BTC HELD&nbsp; n<sub>T</sub>", "kpi-holdings"),
-    KpiSpec("trigger", "TRIGGER&nbsp; P<sub>floor</sub>", "kpi-trigger"),
-    KpiSpec("fills", "FILLS&nbsp; MAKER / TAKER", "kpi-fills"),
-    KpiSpec("missed", "MISSED MAKERS", "kpi-missed"),
-    KpiSpec("costs", "FEES + SLIPPAGE", "kpi-costs"),
+    KpiSpec("equity", "NET EQUITY&nbsp; V<sub>T</sub>", "kpi-equity", "EQUITY"),
+    KpiSpec("cushion", "CUSHION&nbsp; V<sub>T</sub> − F", "kpi-cushion", "CUSHION"),
+    KpiSpec("floor", "FLOOR INTEGRITY", "kpi-floor", "FLOOR"),
+    KpiSpec("holdings", "BTC HELD&nbsp; n<sub>T</sub>", "kpi-holdings", "BTC HELD"),
+    KpiSpec("trigger", "TRIGGER&nbsp; P<sub>floor</sub>", "kpi-trigger", "TRIGGER"),
+    KpiSpec("fills", "FILLS&nbsp; MAKER / TAKER", "kpi-fills", "FILLS M/T"),
+    KpiSpec("missed", "MISSED MAKERS", "kpi-missed", "MISSED"),
+    KpiSpec("costs", "FEES + SLIPPAGE", "kpi-costs", "COSTS"),
 )
 
 
@@ -75,8 +79,8 @@ def compute_kpis(run: RunOutput, ensemble: EnsembleResult | None = None) -> dict
         tone: Tone = "bad" if ensemble.floor_breaches else status.tone
         status = KpiValue(
             status.value,
-            f"MC {ensemble.members} seeds: {ensemble.floor_breaches} breaches · "
-            f"{ensemble.liquidated_members} liquidated",
+            f"MC {ensemble.floor_breaches} breaches · "
+            f"{ensemble.liquidated_members}/{ensemble.members} liq.",
             tone,
         )
 
@@ -152,6 +156,17 @@ class KpiCard(QtWidgets.QFrame):
         layout.addLayout(head)
         layout.addWidget(self.value)
         layout.addWidget(self.subtitle)
+
+    def resizeEvent(self, event: QtGui.QResizeEvent) -> None:
+        super().resizeEvent(event)
+        compact = "true" if self.width() < COMPACT_BELOW_PX else "false"
+        if self.property("compact") != compact:
+            self.setProperty("compact", compact)
+            self.title.setText(self.spec.short if compact == "true" else self.spec.title)
+            for label in (self.value, self.subtitle):
+                label.setProperty("compact", compact)
+                label.style().unpolish(label)
+                label.style().polish(label)
 
     def set_value(self, kpi: KpiValue) -> None:
         self.value.setText(kpi.value)

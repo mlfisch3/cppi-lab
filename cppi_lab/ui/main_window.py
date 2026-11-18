@@ -84,6 +84,22 @@ SCENARIOS: tuple[Scenario, ...] = (
 CRASH_SCENARIO = SCENARIOS[1]
 
 
+class ElidedLabel(QtWidgets.QLabel):
+    """A one-line label that shortens its text with an ellipsis instead of clipping it."""
+
+    def minimumSizeHint(self) -> QtCore.QSize:
+        return QtCore.QSize(0, super().minimumSizeHint().height())
+
+    def paintEvent(self, event: QtGui.QPaintEvent) -> None:
+        painter = QtGui.QPainter(self)
+        painter.setPen(self.palette().color(self.foregroundRole()))
+        rect = self.contentsRect()
+        text = self.fontMetrics().elidedText(
+            self.text(), QtCore.Qt.TextElideMode.ElideRight, rect.width()
+        )
+        painter.drawText(rect, int(self.alignment()), text)
+
+
 class ElasticComboBox(QtWidgets.QComboBox):
     """A combo box that shows its full text when there is room and yields when not."""
 
@@ -326,7 +342,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.norm_chip.setFixedHeight(20)
         self.norm_chip.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.norm_chip.hide()
-        self.status_chip = QtWidgets.QLabel("", bar)
+        self.status_chip = ElidedLabel("", bar)
         self.status_chip.setObjectName("statusChip")
         # The read-out gives way first when the window is narrow.
         self.status_chip.setMinimumWidth(0)
