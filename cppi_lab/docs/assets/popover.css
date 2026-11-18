@@ -1,0 +1,35 @@
+/* "?" popover pages (cppidoc://popover/<id>). */
+html, body { margin: 0; padding: 0; background: #162033; }
+body {
+  padding: 2px 14px 12px 14px;
+  color: #E5E7EB;
+  font: 12px/1.5 Inter, "Segoe UI", "SF Pro Text", "DejaVu Sans", "Helvetica Neue", Arial, sans-serif;
+  overflow-x: hidden;
+}
+h1 { font-size: 13px; line-height: 1.35; margin: 0 0 4px 0; font-weight: 700; color: #F8FAFC; }
+p { margin: 6px 0; }
+p.default { color: #94A3B8; font-size: 11px; margin-top: 0; }
+p.summary { color: #E5E7EB; }
+p.impl { color: #94A3B8; font-size: 11px; border-top: 1px solid #243044; padding-top: 7px; }
+code {
+  font: 11px "JetBrains Mono", "Cascadia Mono", "SF Mono", "DejaVu Sans Mono", Consolas, monospace;
+  background: #0B0F19; border: 1px solid #243044; border-radius: 3px; padding: 0 3px; color: #C7D2FE;
+}
+.math {
+  background: #0B0F19; border: 1px solid #243044; border-radius: 4px;
+  padding: 7px 8px; margin: 8px 0; overflow-x: auto; overflow-y: hidden;
+}
+.math .katex-display { margin: 0; }
+.katex { font-size: 1.04em; }
+.math .katex { font-size: 0.98em; }
+ul { margin: 6px 0; padding-left: 17px; }
+li { margin: 3px 0; color: #CBD5E1; }
+strong { color: #F8FAFC; }
+nav { margin-top: 9px; display: flex; flex-direction: column; gap: 4px; }
+nav a {
+  color: #38BDF8; text-decoration: none; font-weight: 600; font-size: 11.5px;
+  padding: 4px 8px; border: 1px solid #1F4A66; border-radius: 4px; background: #0C2A3D;
+}
+nav a:hover { background: #103850; border-color: #38BDF8; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #2A3549; border-radius: 4px; }

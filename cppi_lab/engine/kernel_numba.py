@@ -349,6 +349,29 @@ def taker_fraction(rho: float, urgency: float) -> float:
 
 
 @njit(cache=True, nogil=True)
+def route_order_by_rho(
+    is_sell: bool,
+    dn: float,
+    d: float,
+    s_down: float,
+    s_up: float,
+    m_miss: int,
+    rho: float,
+    maker_dominated: bool,
+) -> tuple[float, float]:
+    """Split a rebalance of ``dn`` BTC into ``(taker, maker)`` child quantities.
+
+    The taker child is ``theta * dn`` and the maker child is the remainder, so
+    the two always add up to the order exactly.
+    """
+    theta = taker_fraction(rho, execution_urgency(is_sell, d, s_down, s_up, m_miss))
+    if maker_dominated:
+        theta = 1.0
+    q_taker = theta * dn
+    return q_taker, dn - q_taker
+
+
+@njit(cache=True, nogil=True)
 def simulate_core(
     ts_ms: IntArray,
     open_: FloatArray,
@@ -583,11 +606,9 @@ def simulate_core(
             if side != chain_side:
                 m_miss = 0
                 chain_side = side
-            theta = taker_fraction(rho, execution_urgency(side == 1, d, sd, su, m_miss))
-            if maker_dominated:
-                theta = 1.0
-            q_taker = theta * dn
-            q_maker = dn - q_taker
+            q_taker, q_maker = route_order_by_rho(
+                side == 1, dn, d, sd, su, m_miss, rho, maker_dominated
+            )
             if q_taker > QTY_EPS:
                 if side == 1:
                     if q_taker > n:
