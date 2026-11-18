@@ -131,9 +131,9 @@ Every row is defined once in `cppi_lab/config/defaults.py` (`PARAM_SPECS`) and v
 
 | Check | Command | Result |
 | :--- | :--- | :--- |
-| Tests | `uv run pytest` | 456 passed; run three times in a row on the final commit with no intermittent failure |
+| Tests | `uv run pytest` | 459 passed; run three times in a row on the final commit with no intermittent failure |
 | Lint and format | `uv run ruff check . && uv run ruff format --check .` | clean |
-| Types | `uv run mypy` (strict) | clean, 52 source files |
+| Types | `uv run mypy` (strict) | clean, 53 source files |
 | Real application, every state | `uv run python scripts/ui_tour.py OUT` | 22 screenshots, inspected |
 | Real mouse: move, resize, dock | `uv run python scripts/drag_dock_tour.py OUT` | 66 checks passed, three runs in a row |
 | Latency budgets | `uv run python benchmarks/bench_latency.py` | all met |

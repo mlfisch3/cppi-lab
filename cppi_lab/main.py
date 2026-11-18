@@ -14,9 +14,13 @@ Start-up order matters and is fixed here:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import ctypes
 import os
+import signal
+import socket
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 #: Where a copy of ``libxcb-cursor.so.0`` installed without root is looked for.
@@ -118,6 +122,55 @@ def set_application_attributes() -> None:
     )
 
 
+#: Exit status after Ctrl+C, as a shell reports a program ended by SIGINT.
+INTERRUPTED = 128 + int(signal.SIGINT)
+
+
+class InterruptWatch:
+    """Lets Ctrl+C in the launching terminal reach an idle Qt event loop.
+
+    Python runs a signal handler only when the interpreter next gets control,
+    and an idle Qt event loop never gives it any: the interrupt would be
+    ignored until the window is touched.  The signal is therefore also written
+    to a socket the event loop watches; reading it brings the interpreter
+    back, which then runs the handler.  Must be created in the main thread.
+    """
+
+    def __init__(self, on_interrupt: Callable[[], None]) -> None:
+        from PySide6 import QtCore
+
+        self.requested = False
+        self._on_interrupt = on_interrupt
+        self._reader, self._writer = socket.socketpair()
+        self._reader.setblocking(False)
+        self._writer.setblocking(False)
+        self._notifier = QtCore.QSocketNotifier(
+            self._reader.fileno(), QtCore.QSocketNotifier.Type.Read
+        )
+        self._notifier.activated.connect(self._drain)
+        self._previous_fd = signal.set_wakeup_fd(self._writer.fileno(), warn_on_full_buffer=False)
+        self._previous_handler = signal.signal(signal.SIGINT, self._handle)
+
+    def _drain(self) -> None:
+        with contextlib.suppress(OSError):  # nothing to read: a spurious wake-up
+            self._reader.recv(64)
+
+    def _handle(self, _signum: int, _frame: object) -> None:
+        self.requested = True
+        self._on_interrupt()
+
+    def close(self) -> None:
+        """Put the previous interrupt handling back."""
+        # ``None`` stands for a handler that was not installed from Python.
+        previous = self._previous_handler
+        signal.signal(signal.SIGINT, signal.SIG_DFL if previous is None else previous)
+        signal.set_wakeup_fd(self._previous_fd)
+        self._notifier.setEnabled(False)
+        self._notifier.deleteLater()
+        self._reader.close()
+        self._writer.close()
+
+
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="cppi-lab",
@@ -173,6 +226,7 @@ def main(argv: list[str] | None = None) -> int:
     app.setApplicationName("CPPI-Lab")
     app.setApplicationDisplayName("CPPI-Lab")
     theme.apply_theme(app)
+    interrupt = InterruptWatch(app.quit)
 
     splash = _Splash()
     splash.show()
@@ -191,6 +245,8 @@ def main(argv: list[str] | None = None) -> int:
     from cppi_lab.engine.controller import warmup
 
     warmup()
+    if interrupt.requested:  # Ctrl+C while the kernels were compiling
+        return INTERRUPTED
 
     splash.say("Building the workbench…")
     from cppi_lab.ui.main_window import MainWindow
@@ -200,7 +256,9 @@ def main(argv: list[str] | None = None) -> int:
     window.show()
     splash.close()
     QtCore.QTimer.singleShot(400, window.popovers.prewarm)
-    code: int = app.exec()
+    # ``quit`` does nothing before the event loop runs, so an interrupt that
+    # arrived while the window was being built is honoured here.
+    code: int = INTERRUPTED if interrupt.requested else app.exec()
 
     from cppi_lab.ui.doc_workbench import release_profile
 
@@ -208,7 +266,7 @@ def main(argv: list[str] | None = None) -> int:
     QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.Type.DeferredDelete)
     app.processEvents()
     release_profile()
-    return code
+    return INTERRUPTED if interrupt.requested else code
 
 
 def _place(window: object, size: str) -> None:

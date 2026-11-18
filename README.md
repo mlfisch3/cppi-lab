@@ -19,6 +19,7 @@ uv run cppi-lab    # start the application
 
 `uv run cppi-lab` is the one command that starts the app.
 The first launch compiles the simulation kernels, which takes about ten seconds; the result is cached and later launches open in about three seconds.
+Closing the main window ends the application, and so does Ctrl+C in the terminal it was started from.
 
 Options:
 
@@ -84,7 +85,7 @@ No account or key is needed.
 ## Tests, lint and type checks
 
 ```bash
-uv run pytest                     # 456 tests, about one and a half minutes
+uv run pytest                     # 459 tests, about one and a half minutes
 uv run ruff check .               # lint
 uv run ruff format --check .      # formatting
 uv run mypy                       # strict type check of the package, scripts and tests
