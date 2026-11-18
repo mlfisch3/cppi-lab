@@ -634,7 +634,9 @@ def read_table(path: Path) -> pl.DataFrame:
     suffix = path.suffix.lower()
     try:
         if suffix in (".parquet", ".pq"):
-            return pl.read_parquet(path)
+            # User files come from many writers; PyArrow's reader accepts the
+            # widest range of Parquet encodings and logical types.
+            return pl.read_parquet(path, use_pyarrow=True)
         if suffix in (".csv", ".tsv", ".txt"):
             return _read_csv(path)
     except pl.exceptions.PolarsError as exc:

@@ -462,7 +462,7 @@ thousands of windows, seeds and parameter sets and require it to be zero.</p>
 <li><strong>No <code>fastmath</code>.</strong> The kernels are decorated
 <code>@njit(cache=True, nogil=True)</code>. <code>fastmath</code> would let the compiler
 assume there are no NaNs, which the telemetry uses as a sentinel, and reorder arithmetic,
-which would make results differ between CPUs. Without it the kernel takes about 1.7 ms for
+which would make results differ between CPUs. Without it the kernel takes about 1.6 ms for
 43,200 bars against a 15 ms budget, so nothing is lost.</li>
 <li><strong>Bit-exact reference.</strong> <code>tests/reference.py</code> is a plain-Python
 interpreter of the same state machine, one method per step. The test-suite requires all 26
@@ -519,12 +519,16 @@ prices, highs and lows that bracket open and close, non-negative volumes.</p>
 WSL2) for a 43,200-bar window; <code>benchmarks/bench_latency.py</code> reproduces the table
 anywhere.</p>
 <table>
-<tr><th>Stage</th><th>Budget</th><th>Measured median</th></tr>
-<tr><td>Single-trajectory kernel</td><td>≤ 15 ms</td><td>1.3 to 1.8 ms</td></tr>
-<tr><td>100-seed ensemble, kernel only</td><td rowspan="2">≤ 120 ms</td><td>12 to 21 ms on 16 threads</td></tr>
-<tr><td>100-seed ensemble incl. 4.32 M draws and percentiles</td><td>55 to 71 ms</td></tr>
-<tr><td>Parameter change to refreshed plots, cards and table</td><td>&lt; 50 ms</td><td>9 to 21 ms</td></tr>
+<tr><th>Stage</th><th>Budget</th><th>Measured</th></tr>
+<tr><td>Single-trajectory kernel</td><td>≤ 15 ms</td><td>1.0 to 1.6 ms median</td></tr>
+<tr><td>100-seed ensemble, kernel only</td><td rowspan="2">≤ 120 ms</td><td>12 to 24 ms on 16 threads</td></tr>
+<tr><td>100-seed ensemble incl. 4.32 M draws and percentiles</td><td>51 to 71 ms median</td></tr>
+<tr><td>Parameter change to refreshed plots, cards and table</td><td>&lt; 50 ms</td><td>10 to 18 ms median</td></tr>
+<tr><td>Chart frame while panning, zooming or moving the crosshair</td><td>16.7 ms (60 FPS)</td><td>16 to 25 ms median, 18 to 31 ms at the 95th percentile: <strong>not met</strong> on this machine</td></tr>
 </table>
+<p>The last row is measured by <code>benchmarks/bench_fps.py</code> on a real display. A frame
+costs 4 to 16 ms to paint; the rest is event handling and presentation through WSLg.
+The cost does not grow with the length of the back-test.</p>
 
 <h3>Chart renderer</h3>
 <p><code>ui/chart_workspace.py</code> builds one <code>pyqtgraph.GraphicsLayoutWidget</code>

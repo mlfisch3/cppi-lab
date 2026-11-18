@@ -109,7 +109,7 @@ def test_theory_volume_renders_with_math_and_the_full_spine(
     # The KaTeX font really loaded from the local scheme.
     assert js(qtbot, page, "document.fonts.check('16px KaTeX_Main')") is True
     assert workbench.volume_label.text() == "Theoretical Strategy Documentation"
-    assert workbench.switch_button.text() == "⇄ Switch to Technical"
+    assert workbench.switch_button.text() == "⇄ Technical"
 
 
 def test_technical_volume_renders_without_errors(qtbot: QtBot, workbench: DocWorkbench) -> None:
@@ -125,6 +125,39 @@ def test_splitter_gives_primary_65_and_preview_35(workbench: DocWorkbench) -> No
     primary, preview = workbench.splitter.sizes()
     assert primary / (primary + preview) == pytest.approx(0.65, abs=0.03)
     assert workbench.preview_view.isVisible()
+
+
+def test_toolbar_has_the_five_specified_controls(workbench: DocWorkbench) -> None:
+    names = [
+        workbench.back_button.accessibleName(),
+        workbench.forward_button.accessibleName(),
+        workbench.switch_button.accessibleName(),
+        workbench.search_edit.accessibleName(),
+        workbench.preview_button.accessibleName(),
+    ]
+    assert names == [
+        "Back",
+        "Forward",
+        "Switch Primary Volume",
+        "Search",
+        "Toggle Counterpart Preview Split",
+    ]
+    assert workbench.toolbar.minimumSizeHint().width() < 520  # still usable in a side panel
+
+
+def test_narrow_panel_stacks_the_two_viewers(qtbot: QtBot, workbench: DocWorkbench) -> None:
+    assert workbench.splitter.orientation() == QtCore.Qt.Orientation.Horizontal
+    workbench.resize(640, 900)
+    qtbot.waitUntil(
+        lambda: workbench.splitter.orientation() == QtCore.Qt.Orientation.Vertical, timeout=WAIT
+    )
+    top, bottom = workbench.splitter.sizes()
+    assert top / (top + bottom) == pytest.approx(0.65, abs=0.04)
+    assert workbench.preview_view.isVisible()
+    workbench.resize(1300, 800)
+    qtbot.waitUntil(
+        lambda: workbench.splitter.orientation() == QtCore.Qt.Orientation.Horizontal, timeout=WAIT
+    )
 
 
 def test_scroll_spy_moves_the_counterpart_preview(qtbot: QtBot, workbench: DocWorkbench) -> None:
@@ -212,7 +245,7 @@ def test_switching_volume_keeps_the_concept(qtbot: QtBot, workbench: DocWorkbenc
     assert workbench.volume == "tech"
     assert parse_doc_url(workbench.primary_view.url()) == ("tech", "sec-3-liquidity")
     assert parse_doc_url(workbench.preview_view.url())[0] == "theory"  # type: ignore[index]
-    assert workbench.switch_button.text() == "⇄ Switch to Theory"
+    assert workbench.switch_button.text() == "⇄ Theory"
     assert workbench.volume_label.text() == "Technical Implementation Documentation"
 
 

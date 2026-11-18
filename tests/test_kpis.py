@@ -53,7 +53,7 @@ def test_busy_window_reports_the_kernel_counters(bundled: MarketData) -> None:
     ensemble = controller.run_ensemble()
     with_fan = compute_kpis(run, ensemble)
     assert with_fan["floor"].subtitle.startswith("MC 0 breaches · ")
-    assert with_fan["floor"].subtitle.endswith("/100 liq.")
+    assert with_fan["floor"].subtitle.endswith(" liq.")
 
 
 def test_gap_is_reported_as_a_breach() -> None:

@@ -79,8 +79,7 @@ def compute_kpis(run: RunOutput, ensemble: EnsembleResult | None = None) -> dict
         tone: Tone = "bad" if ensemble.floor_breaches else status.tone
         status = KpiValue(
             status.value,
-            f"MC {ensemble.floor_breaches} breaches · "
-            f"{ensemble.liquidated_members}/{ensemble.members} liq.",
+            f"MC {ensemble.floor_breaches} breaches · {ensemble.liquidated_members} liq.",
             tone,
         )
 

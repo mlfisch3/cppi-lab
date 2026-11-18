@@ -109,7 +109,7 @@ _TICK_STEPS: tuple[int, ...] = (
     61 * 86_400, 91 * 86_400, 182 * 86_400, 365 * 86_400,
 )  # fmt: skip
 #: Minimum distance between two time labels.
-_TICK_MIN_PX = 104.0
+_TICK_MIN_PX = 64.0
 
 
 def time_ticks(x_min: float, x_max: float, width_px: float) -> tuple[int, list[float]]:

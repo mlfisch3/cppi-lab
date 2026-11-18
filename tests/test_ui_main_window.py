@@ -418,6 +418,25 @@ def test_ledger_opens_floating_on_top_and_docks(qtbot: QtBot, window: MainWindow
     assert not dock.isClosed()
 
 
+def test_docked_panel_can_collapse_into_an_auto_hide_side_bar(
+    qtbot: QtBot, window: MainWindow
+) -> None:
+    import PySide6QtAds as ads
+
+    auto_hide = ads.CDockManager.eAutoHideFlag
+    assert ads.CDockManager.testAutoHideConfigFlag(auto_hide.AutoHideFeatureEnabled)
+    dock = window.ledger_dock
+    window.dock_to(dock, ads.DockWidgetArea.RightDockWidgetArea)
+    qtbot.waitUntil(window.ledger.isVisible, timeout=5_000)
+    dock.toggleAutoHide()
+    qtbot.waitUntil(dock.isAutoHide, timeout=5_000)
+    assert len(window.dock_manager.autoHideWidgets()) == 1
+    assert all(plot.height() > 100 for plot in window.chart.plots)
+    dock.toggleAutoHide()
+    qtbot.waitUntil(lambda: not dock.isAutoHide(), timeout=5_000)
+    assert not dock.isFloating()
+
+
 def test_docking_menu_lists_every_position(window: MainWindow) -> None:
     labels = [a.text() for a in window.ledger_button.menu().actions() if a.text()]
     assert labels == ["Float (always on top)", "Dock Left", "Dock Right", "Dock Bottom", "Hide"]

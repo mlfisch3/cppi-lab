@@ -31,9 +31,12 @@ from cppi_lab.ui.doc_scheme import (
     install_handler,
     parse_doc_url,
 )
+from cppi_lab.ui.widgets import ElidedLabel
 
 PRIMARY_SHARE = 65
 PREVIEW_SHARE = 35
+#: Below this width the two viewers are stacked instead of placed side by side.
+STACK_BELOW_PX = 820
 
 _profile: QWebEngineProfile | None = None
 
@@ -199,43 +202,49 @@ class DocWorkbench(QtWidgets.QWidget):
         self.toolbar = QtWidgets.QWidget(self)
         self.toolbar.setObjectName("docBar")
         self.toolbar.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.back_button = QtWidgets.QPushButton("← Back", self.toolbar)
+        self.back_button = QtWidgets.QPushButton("←", self.toolbar)
         self.back_button.setToolTip("Back")
+        self.back_button.setAccessibleName("Back")
+        self.back_button.setFixedWidth(34)
         self.back_button.clicked.connect(self.primary_view.back)
-        self.forward_button = QtWidgets.QPushButton("Forward →", self.toolbar)
+        self.forward_button = QtWidgets.QPushButton("→", self.toolbar)
         self.forward_button.setToolTip("Forward")
+        self.forward_button.setAccessibleName("Forward")
+        self.forward_button.setFixedWidth(34)
         self.forward_button.clicked.connect(self.primary_view.forward)
         self.switch_button = QtWidgets.QPushButton("", self.toolbar)
         self.switch_button.setObjectName("primary")
         self.switch_button.setToolTip("Switch Primary Volume (Theory ⇄ Technical)")
+        self.switch_button.setAccessibleName("Switch Primary Volume")
         self.switch_button.clicked.connect(self.switch_volume)
-        self.volume_label = QtWidgets.QLabel("", self.toolbar)
+        self.volume_label = ElidedLabel("", self.toolbar)
         self.volume_label.setObjectName("paneTitle")
         self.search_edit = QtWidgets.QLineEdit(self.toolbar)
         self.search_edit.setPlaceholderText("Search this volume…")
         self.search_edit.setClearButtonEnabled(True)
-        self.search_edit.setFixedWidth(220)
+        self.search_edit.setMinimumWidth(96)
+        self.search_edit.setMaximumWidth(230)
         self.search_edit.setAccessibleName("Search")
         self.search_edit.textChanged.connect(lambda text: self.find_text(text))
         self.search_edit.returnPressed.connect(lambda: self.find_text(self.search_edit.text()))
         self.search_status = QtWidgets.QLabel("", self.toolbar)
         self.search_status.setProperty("role", "muted")
-        self.search_status.setMinimumWidth(64)
-        self.preview_button = QtWidgets.QPushButton("Counterpart Preview", self.toolbar)
+        self.search_status.setMinimumWidth(52)
+        self.preview_button = QtWidgets.QPushButton("Counterpart", self.toolbar)
         self.preview_button.setCheckable(True)
         self.preview_button.setChecked(True)
         self.preview_button.setToolTip("Toggle Counterpart Preview Split")
+        self.preview_button.setAccessibleName("Toggle Counterpart Preview Split")
         self.preview_button.toggled.connect(self.set_preview_visible)
         row = QtWidgets.QHBoxLayout(self.toolbar)
         row.setContentsMargins(8, 5, 8, 5)
         row.setSpacing(6)
         row.addWidget(self.back_button)
         row.addWidget(self.forward_button)
-        row.addSpacing(6)
-        row.addWidget(self.volume_label)
+        row.addSpacing(4)
+        row.addWidget(self.volume_label, 2)
         row.addWidget(self.switch_button)
-        row.addStretch(1)
-        row.addWidget(self.search_edit)
+        row.addWidget(self.search_edit, 3)
         row.addWidget(self.search_status)
         row.addWidget(self.preview_button)
 
@@ -245,8 +254,29 @@ class DocWorkbench(QtWidgets.QWidget):
         self.forward_button.setEnabled(history.canGoForward())
         other = counterpart(self._volume)
         self.volume_label.setText(self._registry.volume_title(self._volume))
+        self.volume_label.setToolTip(self._registry.volume_title(self._volume))
         short = "Technical" if other == "tech" else "Theory"
-        self.switch_button.setText(f"⇄ Switch to {short}")
+        self.switch_button.setText(f"⇄ {short}")
+
+    def resizeEvent(self, event: QtGui.QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._fit_splitter()
+
+    def _fit_splitter(self) -> None:
+        """Side by side when wide; stacked when docked into a narrow side panel."""
+        wanted = (
+            QtCore.Qt.Orientation.Horizontal
+            if self.width() >= STACK_BELOW_PX
+            else QtCore.Qt.Orientation.Vertical
+        )
+        if self.splitter.orientation() != wanted:
+            self.splitter.setOrientation(wanted)
+            self._apply_shares()
+
+    def _apply_shares(self) -> None:
+        horizontal = self.splitter.orientation() == QtCore.Qt.Orientation.Horizontal
+        total = max(1, self.splitter.width() if horizontal else self.splitter.height())
+        self.splitter.setSizes([total * PRIMARY_SHARE // 100, total * PREVIEW_SHARE // 100])
 
     # -- navigation ----------------------------------------------------------------
     @property
@@ -367,8 +397,7 @@ class DocWorkbench(QtWidgets.QWidget):
         if self.preview_button.isChecked() != visible:
             self.preview_button.setChecked(visible)
         if visible:
-            total = max(1, self.splitter.width())
-            self.splitter.setSizes([total * PRIMARY_SHARE // 100, total * PREVIEW_SHARE // 100])
+            self._apply_shares()
             self._sync_preview(self._focused)
 
     # -- search --------------------------------------------------------------------

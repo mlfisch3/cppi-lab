@@ -49,6 +49,7 @@ from cppi_lab.ui.doc_scheme import DocRegistry, load_registry
 from cppi_lab.ui.kpi_ribbon import KpiRibbon, compute_kpis
 from cppi_lab.ui.ledger_window import LedgerWidget
 from cppi_lab.ui.popover_manager import RichPopoverManager
+from cppi_lab.ui.widgets import ElasticComboBox, ElidedLabel
 
 TOP_BAR_HEIGHT = 38
 
@@ -82,33 +83,6 @@ SCENARIOS: tuple[Scenario, ...] = (
 )
 #: The scenario offered by the empty-state banner.
 CRASH_SCENARIO = SCENARIOS[1]
-
-
-class ElidedLabel(QtWidgets.QLabel):
-    """A one-line label that shortens its text with an ellipsis instead of clipping it."""
-
-    def minimumSizeHint(self) -> QtCore.QSize:
-        return QtCore.QSize(0, super().minimumSizeHint().height())
-
-    def paintEvent(self, event: QtGui.QPaintEvent) -> None:
-        painter = QtGui.QPainter(self)
-        painter.setPen(self.palette().color(self.foregroundRole()))
-        rect = self.contentsRect()
-        text = self.fontMetrics().elidedText(
-            self.text(), QtCore.Qt.TextElideMode.ElideRight, rect.width()
-        )
-        painter.drawText(rect, int(self.alignment()), text)
-
-
-class ElasticComboBox(QtWidgets.QComboBox):
-    """A combo box that shows its full text when there is room and yields when not."""
-
-    def minimumSizeHint(self) -> QtCore.QSize:
-        return QtCore.QSize(120, super().minimumSizeHint().height())
-
-    def sizeHint(self) -> QtCore.QSize:
-        hint = super().sizeHint()
-        return QtCore.QSize(min(hint.width() + 8, 340), hint.height())
 
 
 class _EnsembleSignals(QtCore.QObject):
@@ -418,6 +392,11 @@ class MainWindow(QtWidgets.QMainWindow):
         ads.CDockManager.setConfigFlag(flag.FocusHighlighting, False)
         ads.CDockManager.setConfigFlag(flag.DockAreaHasTabsMenuButton, False)
         ads.CDockManager.setConfigFlag(flag.FloatingContainerHasWidgetTitle, True)
+        # TSD 4.2: a docked panel can also be collapsed into an auto-hide side bar.
+        auto_hide = ads.CDockManager.eAutoHideFlag
+        ads.CDockManager.setAutoHideConfigFlag(auto_hide.AutoHideFeatureEnabled, True)
+        ads.CDockManager.setAutoHideConfigFlag(auto_hide.DockAreaHasAutoHideButton, True)
+        ads.CDockManager.setAutoHideConfigFlag(auto_hide.AutoHideCloseButtonCollapsesDock, False)
         self.dock_manager = ads.CDockManager(self)
 
         feature = ads.CDockWidget.DockWidgetFeature
@@ -558,6 +537,7 @@ class MainWindow(QtWidgets.QMainWindow):
         dock.toggleView(True)
         # Size the panel once the new splitter has been laid out.
         QtCore.QTimer.singleShot(0, partial(self._size_docked_panel, dock, area))
+        QtCore.QTimer.singleShot(120, partial(self._size_docked_panel, dock, area))
 
     def _size_docked_panel(self, dock: ads.CDockWidget, area: ads.DockWidgetArea) -> None:
         """Give a freshly docked panel a useful share; the chart reflows into the rest."""

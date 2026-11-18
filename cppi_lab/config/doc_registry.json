@@ -117,7 +117,7 @@
   ],
   "popovers": {
     "param-start": {
-      "title": "Start Date &amp; Time (UTC) &mdash; $t_0$",
+      "title": "Start Date &amp; Time (UTC) - $t_0$",
       "default": "2026-01-01 00:00",
       "summary": "First bar of the back-test window. The simulation covers every bar with $t_0 \\le \\tau_t < t_0 + \\Delta T$ of the active dataset.",
       "math": "",
@@ -129,7 +129,7 @@
       "concept": "sec-6-workbench"
     },
     "param-duration": {
-      "title": "Simulation Duration &mdash; $\\Delta T$",
+      "title": "Simulation Duration - $\\Delta T$",
       "default": "30 days",
       "summary": "Length of the back-test in days. Thirty days of 1-minute bars is 43,200 bars.",
       "math": "",
@@ -141,7 +141,7 @@
       "concept": "sec-6-workbench"
     },
     "param-n0": {
-      "title": "Initial BTC Holdings &mdash; $N_0$",
+      "title": "Initial BTC Holdings - $N_0$",
       "default": "1.0000 BTC",
       "summary": "BTC held at the first bar. Together with $c_0$ and $P_{\\text{liq}}$ it fixes the hard floor.",
       "math": "F = N_0 \\cdot P_{\\text{liq}} + c_0",
@@ -154,7 +154,7 @@
       "concept": "sec-1-floor-buffer"
     },
     "param-c0": {
-      "title": "Initial USD Cash &mdash; $c_0$",
+      "title": "Initial USD Cash - $c_0$",
       "default": "$0.00",
       "summary": "USD held at the first bar. It is part of the protected wealth and is also deployable: the envelope may spend it on BTC when the growth signal allows.",
       "math": "F = N_0 \\cdot P_{\\text{liq}} + c_0",
@@ -178,7 +178,7 @@
       "concept": "sec-6-workbench"
     },
     "param-p-liq": {
-      "title": "Hard Liquidation Floor Price &mdash; $P_{\\text{liq}}$",
+      "title": "Hard Liquidation Floor Price - $P_{\\text{liq}}$",
       "default": "$60,000.00",
       "summary": "The price below which the account must hold no BTC. The strategy guarantees a complete sale before the market trades below it, on every bar that does not gap.",
       "math": "P_{\\text{floor},t} = \\max\\!\\left(\\frac{P_{\\text{liq}}}{1-\\gamma},\\; \\frac{\\max(0,\\,F-c_t)}{n_t\\,(1-\\gamma)}\\right)",
@@ -191,7 +191,7 @@
       "concept": "sec-1-floor-buffer"
     },
     "param-p-ref": {
-      "title": "Upper Full-Allocation Reference &mdash; $P_{\\text{ref}}$",
+      "title": "Upper Full-Allocation Reference - $P_{\\text{ref}}$",
       "default": "$72,000.00",
       "summary": "The price at and above which the envelope allows full allocation. Between the trigger and $P_{\\text{ref}}$ the permitted holding grows linearly.",
       "math": "d_t = \\operatorname{clip}\\!\\left(\\frac{P_t - P_{\\text{floor},t}}{\\max(P_{\\text{ref}} - P_{\\text{floor},t},\\,1)},\\,0,\\,1\\right)",
@@ -204,7 +204,7 @@
       "concept": "sec-2-dual-envelope"
     },
     "param-dn-min": {
-      "title": "Minimum Rebalance Threshold &mdash; $\\Delta n_{\\min}$",
+      "title": "Minimum Rebalance Threshold - $\\Delta n_{\\min}$",
       "default": "3.0 % of N₀",
       "summary": "The smallest order the control law will place, as a percentage of $N_0$. It is the width of the dead zone around each envelope edge and the main lever against fee churn.",
       "math": "\\Delta n_{\\text{eff},t} = \\begin{cases} 0 & P_t \\le P_{\\text{floor},t} + 250 \\\\ \\Delta n_{\\min} & \\text{otherwise} \\end{cases}",
@@ -217,7 +217,7 @@
       "concept": "sec-2-dual-envelope"
     },
     "param-f-maker": {
-      "title": "Maker Fee Rate &mdash; $f_{\\text{maker}}$",
+      "title": "Maker Fee Rate - $f_{\\text{maker}}$",
       "default": "0.15 %",
       "summary": "Fee paid on a passive <code>post_only</code> order that fills at its limit price.",
       "math": "",
@@ -230,7 +230,7 @@
       "concept": "sec-2-4-rho"
     },
     "param-f-taker": {
-      "title": "Taker Fee Rate &mdash; $f_{\\text{taker}}$",
+      "title": "Taker Fee Rate - $f_{\\text{taker}}$",
       "default": "0.30 %",
       "summary": "Fee paid on an order that executes immediately. With the slippage allowance it forms the emergency exit friction $\\gamma$.",
       "math": "\\gamma = f_{\\text{taker}} + \\delta_{\\text{slip}}",
@@ -242,7 +242,7 @@
       "concept": "sec-2-4-rho"
     },
     "param-delta-slip": {
-      "title": "Safety Buffer Slippage Allowance &mdash; $\\delta_{\\text{slip}}$",
+      "title": "Safety Buffer Slippage Allowance - $\\delta_{\\text{slip}}$",
       "default": "0.10 %",
       "summary": "Price concession assumed on every immediate order, and the slippage reserved inside the safety buffer for the emergency exit.",
       "math": "\\Delta P_{\\text{buf},0} = P_{\\text{liq}} \\cdot \\frac{\\gamma}{1-\\gamma}",
@@ -254,7 +254,7 @@
       "concept": "sec-1-floor-buffer"
     },
     "param-rho": {
-      "title": "Risk-Aversion Parameter &mdash; $\\rho \\in [0, 1]$",
+      "title": "Risk-Aversion Parameter - $\\rho \\in [0, 1]$",
       "default": "0.25",
       "summary": "Tunes how conservatively the strategy chooses between passive <code>post_only</code> maker orders (lower fee, stochastic fill probability $P_{\\text{fill},t}$) and immediate taker orders (higher fee, guaranteed fill).",
       "math": "\\theta_{\\text{taker},t}(\\rho) = \\begin{cases} 0 & \\rho = 0 \\\\ 1 & \\rho = 1 \\ \\text{or}\\ u_t \\ge 1-\\rho \\\\ \\rho & \\text{otherwise} \\end{cases}",
@@ -267,7 +267,7 @@
       "concept": "sec-2-4-rho"
     },
     "param-lambda-liq": {
-      "title": "Base Liquidity Depth Factor &mdash; $\\lambda_{\\text{liq}}$",
+      "title": "Base Liquidity Depth Factor - $\\lambda_{\\text{liq}}$",
       "default": "2.50",
       "summary": "How quickly the chance of a fill rises as the bar trades further through the limit price. It models the depth of the queue ahead of the order.",
       "math": "\\Phi_{\\text{pen},t} = 1 - \\exp\\!\\left(-\\lambda_{\\text{liq}} \\cdot \\frac{\\Delta P_{\\text{pen},t}}{\\text{ATR}_t}\\right)",
@@ -279,7 +279,7 @@
       "concept": "sec-3-liquidity"
     },
     "param-beta-vel": {
-      "title": "Adverse Price Velocity Penalty &mdash; $\\beta_{\\text{vel}}$",
+      "title": "Adverse Price Velocity Penalty - $\\beta_{\\text{vel}}$",
       "default": "1.80",
       "summary": "Penalises bars that swept away from the resting order: a sell limit is unlikely to fill in a bar that closed far below its open.",
       "math": "\\Phi_{\\text{vel},t} = \\exp\\!\\left(-\\beta_{\\text{vel}} \\cdot \\frac{\\max(0,\\,O_t - C_t)}{\\text{ATR}_t}\\right)\\ \\text{(sell)}",
@@ -291,7 +291,7 @@
       "concept": "sec-3-liquidity"
     },
     "param-alpha-size": {
-      "title": "Order Size Impact Exponent &mdash; $\\alpha_{\\text{size}}$",
+      "title": "Order Size Impact Exponent - $\\alpha_{\\text{size}}$",
       "default": "1.20",
       "summary": "How sharply the fill probability falls once the order is large relative to the opposing taker volume of the bar.",
       "math": "\\Phi_{\\text{size},t} = \\frac{1}{1 + \\left(\\dfrac{q_{\\text{maker}}}{\\max(0.01\\,V_{\\text{opp},t},\\,10^{-8})}\\right)^{\\alpha_{\\text{size}}}}",
@@ -303,7 +303,7 @@
       "concept": "sec-3-liquidity"
     },
     "param-seed": {
-      "title": "Uniform PRNG Seed &mdash; $s_{\\text{rng}}$",
+      "title": "Uniform PRNG Seed - $s_{\\text{rng}}$",
       "default": "42",
       "summary": "Seed of the uniform variates that decide every maker fill. The same seed always reproduces the same trajectory, on any machine.",
       "math": "U_t \\le P_{\\text{fill},t} \\;\\Rightarrow\\; \\text{fill at the limit}, \\qquad U_t > P_{\\text{fill},t} \\;\\Rightarrow\\; \\text{missed order}",
@@ -315,7 +315,7 @@
       "concept": "sec-3-liquidity"
     },
     "param-mc-fan": {
-      "title": "Monte Carlo Liquidity Fan &mdash; $M = 100$ Seeds",
+      "title": "Monte Carlo Liquidity Fan - $M = 100$ Seeds",
       "default": "Off",
       "summary": "Runs the back-test for one hundred seeds in parallel and shades the 5th to 95th percentile of net equity behind the active trajectory. The width of the band is the part of the outcome that is luck of the fill.",
       "math": "",
@@ -328,7 +328,7 @@
       "concept": "sec-3-liquidity"
     },
     "param-ema-d": {
-      "title": "Decline Signal: Fast / Slow EMA Windows &mdash; $W_{f,d},\\ W_{s,d}$",
+      "title": "Decline Signal: Fast / Slow EMA Windows - $W_{f,d},\\ W_{s,d}$",
       "default": "5 m / 30 m",
       "summary": "Spans of the two exponential averages of the close whose difference measures downward momentum.",
       "math": "M_{\\text{down},t} = \\operatorname{clip}\\!\\left(\\frac{\\mathcal{E}_{W_{s,d}}(C)_t - \\mathcal{E}_{W_{f,d}}(C)_t}{1.5 \\cdot \\max(\\mathcal{E}_{W_{\\text{atr},d}}(\\text{TR})_t,\\,1)},\\,0,\\,1\\right)",
@@ -340,7 +340,7 @@
       "concept": "sec-4-signals"
     },
     "param-atr-d": {
-      "title": "Decline Signal: Volatility ATR Window &mdash; $W_{\\text{atr},d}$",
+      "title": "Decline Signal: Volatility ATR Window - $W_{\\text{atr},d}$",
       "default": "15 m",
       "summary": "Span of the average true range that normalises downward momentum. The same ATR is the volatility yardstick of the fill model.",
       "math": "\\text{ATR}_t = \\max\\!\\big(\\mathcal{E}_{W_{\\text{atr},d}}(\\text{TR})_t,\\ 1.0\\big)",
@@ -351,7 +351,7 @@
       "concept": "sec-4-signals"
     },
     "param-imb-d": {
-      "title": "Decline Signal: Trade Flow Imbalance Window &mdash; $W_{\\text{imb},d}$",
+      "title": "Decline Signal: Trade Flow Imbalance Window - $W_{\\text{imb},d}$",
       "default": "10 m",
       "summary": "Number of bars over which taker sell volume is compared with taker buy volume.",
       "math": "I_{\\text{down},t} = \\operatorname{clip}\\!\\left(\\frac{\\Sigma_{\\text{sell},t} - \\Sigma_{\\text{buy},t}}{0.40 \\cdot \\max(\\Sigma_{\\text{sell},t} + \\Sigma_{\\text{buy},t},\\,10^{-8})},\\,0,\\,1\\right)",
@@ -363,7 +363,7 @@
       "concept": "sec-4-signals"
     },
     "param-w-mom-d": {
-      "title": "Momentum vs. Imbalance Weight &mdash; $w_{m,d}$",
+      "title": "Momentum vs. Imbalance Weight - $w_{m,d}$",
       "default": "0.60",
       "summary": "Blend between price momentum and order-flow imbalance in the decline signal.",
       "math": "S_{\\text{down},t} = \\operatorname{clip}\\!\\big(w_{m,d}\\,M_{\\text{down},t} + (1-w_{m,d})\\,I_{\\text{down},t},\\,0,\\,1\\big)",
@@ -374,7 +374,7 @@
       "concept": "sec-4-signals"
     },
     "param-k-sell": {
-      "title": "Decline Signal Gain &mdash; $k_{\\text{sell}}$",
+      "title": "Decline Signal Gain - $k_{\\text{sell}}$",
       "default": "1.00",
       "summary": "How strongly the decline signal pulls the sell ceiling below the linear glidepath.",
       "math": "n_{\\text{ceil},t} = n_{\\max,t}\\, d_t\\, \\big(1 - k_{\\text{sell}}\\,(1-d_t)\\,S_{\\text{down},t}\\big)",
@@ -387,7 +387,7 @@
       "concept": "sec-2-dual-envelope"
     },
     "param-ema-u": {
-      "title": "Growth Signal: Fast / Slow EMA Windows &mdash; $W_{f,u},\\ W_{s,u}$",
+      "title": "Growth Signal: Fast / Slow EMA Windows - $W_{f,u},\\ W_{s,u}$",
       "default": "15 m / 60 m",
       "summary": "Spans of the two averages whose difference measures the upward trend. They are deliberately slower than the decline pair: selling should be quick, rebuying patient.",
       "math": "M_{\\text{up},t} = \\operatorname{clip}\\!\\left(\\frac{\\mathcal{E}_{W_{f,u}}(C)_t - \\mathcal{E}_{W_{s,u}}(C)_t}{2.0 \\cdot \\max(\\mathcal{E}_{W_{\\text{atr},u}}(\\text{TR})_t,\\,1)},\\,0,\\,1\\right)",
@@ -398,7 +398,7 @@
       "concept": "sec-4-signals"
     },
     "param-atr-u": {
-      "title": "Growth Signal: Volatility ATR Window &mdash; $W_{\\text{atr},u}$",
+      "title": "Growth Signal: Volatility ATR Window - $W_{\\text{atr},u}$",
       "default": "60 m",
       "summary": "Span of the average true range that normalises the upward trend.",
       "math": "",
@@ -409,7 +409,7 @@
       "concept": "sec-4-signals"
     },
     "param-brk-u": {
-      "title": "Growth Signal: Range Breakout Window &mdash; $W_{\\text{brk},u}$",
+      "title": "Growth Signal: Range Breakout Window - $W_{\\text{brk},u}$",
       "default": "240 m",
       "summary": "Look-back of the high-low range. The breakout term is positive only while the close is in the upper half of that range.",
       "math": "B_{\\text{up},t} = \\operatorname{clip}\\!\\left(\\frac{C_t - M_t}{R_t},\\,0,\\,1\\right), \\quad M_t = \\tfrac12\\big(H^{(W)}_t + L^{(W)}_t\\big),\\ R_t = \\max\\!\\big(\\tfrac12(H^{(W)}_t - L^{(W)}_t),\\,1\\big)",
@@ -420,7 +420,7 @@
       "concept": "sec-4-signals"
     },
     "param-tau-veto": {
-      "title": "Decline Veto Gate Threshold &mdash; $\\tau_{\\text{veto}}$",
+      "title": "Decline Veto Gate Threshold - $\\tau_{\\text{veto}}$",
       "default": "0.50",
       "summary": "Level of the decline signal at which rebuying is switched off completely. Below it the growth signal is scaled down linearly.",
       "math": "G_{\\text{veto},t} = \\max\\!\\left(0,\\ 1 - \\frac{S_{\\text{down},t}}{\\tau_{\\text{veto}}}\\right), \\qquad S_{\\text{up},t} = \\operatorname{clip}\\!\\big((0.5\\,M_{\\text{up},t} + 0.5\\,B_{\\text{up},t})\\,G_{\\text{veto},t},\\,0,\\,1\\big)",
@@ -432,7 +432,7 @@
       "concept": "sec-4-signals"
     },
     "kpi-equity": {
-      "title": "Net Equity &mdash; $V_T$",
+      "title": "Net Equity - $V_T$",
       "default": "",
       "summary": "Liquidation value of the account at the last bar: cash plus BTC valued at the close, net of the fee and slippage an immediate exit would cost.",
       "math": "V_t = c_t + n_t \\cdot P_t \\cdot (1-\\gamma)",
@@ -444,7 +444,7 @@
       "concept": "sec-1-floor-buffer"
     },
     "kpi-cushion": {
-      "title": "Active Risk Cushion &mdash; $C_T = \\max(0, V_T - F)$",
+      "title": "Active Risk Cushion - $C_T = \\max(0, V_T - F)$",
       "default": "",
       "summary": "What the account can still lose before it is worth only the floor. Every whipsaw and every fee is paid out of it; when it reaches zero the strategy can no longer hold BTC.",
       "math": "C_t = \\max\\big(0,\\ V_t - F\\big)",
@@ -469,7 +469,7 @@
       "concept": "sec-5-state-machine"
     },
     "kpi-holdings": {
-      "title": "BTC Held &mdash; $n_T$",
+      "title": "BTC Held - $n_T$",
       "default": "",
       "summary": "BTC in the account at the last bar. The subtitle is the recoverable inventory: what the account would hold if all its cash were converted back at the last close.",
       "math": "n_{\\max,t} = n_t + \\frac{c_t}{P_t\\,(1 + f_{\\text{eff}}(\\rho))}",
@@ -480,7 +480,7 @@
       "concept": "sec-1-whipsaw-cost"
     },
     "kpi-trigger": {
-      "title": "Liquidation Trigger &mdash; $P_{\\text{floor},T}$",
+      "title": "Liquidation Trigger - $P_{\\text{floor},T}$",
       "default": "",
       "summary": "Price at which the emergency taker exit would fire at the last bar: the liquidation level plus the safety buffer.",
       "math": "\\Delta P_{\\text{buf},t} = P_{\\text{floor},t} - P_{\\text{liq}} \\ \\ge\\ P_{\\text{liq}} \\cdot \\frac{\\gamma}{1-\\gamma}",
@@ -491,7 +491,7 @@
       "concept": "sec-1-floor-buffer"
     },
     "kpi-fills": {
-      "title": "Fills &mdash; Maker / Taker",
+      "title": "Fills - Maker / Taker",
       "default": "",
       "summary": "Number of executed orders by route. The subtitle is the share of traded BTC that went through passive orders.",
       "math": "",
@@ -527,7 +527,7 @@
       "concept": "sec-1-whipsaw-cost"
     },
     "pane-price": {
-      "title": "Pane 1 &mdash; Price, Floor &amp; Net Portfolio Equity",
+      "title": "Pane 1 - Price, Floor &amp; Net Portfolio Equity",
       "default": "",
       "summary": "The market and the account on one axis. Net equity is drawn per initial BTC, $V_t / N_0$, so it can be read against the price.",
       "math": "P_{\\text{liq}} \\ \\le\\ P_{\\text{floor},t}, \\qquad V_t \\ge F \\iff \\frac{V_t}{N_0} \\ge P_{\\text{liq}} + \\frac{c_0}{N_0}",
@@ -541,7 +541,7 @@
       "concept": "sec-1-floor-buffer"
     },
     "pane-holdings": {
-      "title": "Pane 2 &mdash; BTC Holdings &amp; Hysteresis Deadband",
+      "title": "Pane 2 - BTC Holdings &amp; Hysteresis Deadband",
       "default": "",
       "summary": "What the strategy holds against what it is allowed to hold. No order is placed while the yellow line stays inside the shaded band.",
       "math": "n_{\\text{floor},t} = n_{\\max,t}\\,d_t\\,S_{\\text{up},t} \\ \\le\\ n_t \\ \\le\\ n_{\\text{ceil},t} = n_{\\max,t}\\,d_t\\,\\big(1 - k_{\\text{sell}}(1-d_t)S_{\\text{down},t}\\big)",
@@ -554,7 +554,7 @@
       "concept": "sec-2-dual-envelope"
     },
     "pane-signals": {
-      "title": "Pane 3 &mdash; Signals &amp; Fill Probability Diagnostics",
+      "title": "Pane 3 - Signals &amp; Fill Probability Diagnostics",
       "default": "",
       "summary": "The two inputs of the control law and the coin flip behind every maker order.",
       "math": "\\text{fill} \\iff U_t \\le P_{\\text{fill},t} = \\Phi_{\\text{pen},t}\\,\\Phi_{\\text{vel},t}\\,\\Phi_{\\text{size},t}",
