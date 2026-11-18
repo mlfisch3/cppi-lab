@@ -205,6 +205,7 @@ class ChartWorkspace(QtWidgets.QWidget):
         self._hover_bar = -1
         self._selected_bar = -1
         self._marker_scale = 1.0
+        self._pane_heights: list[int] = []
         self._liquidation_lines: list[pg.InfiniteLine] = []
         self._liquidation_badges: list[pg.TextItem] = []
 
@@ -594,7 +595,26 @@ class ChartWorkspace(QtWidgets.QWidget):
     def _schedule_layout(self) -> None:
         self._layout_timer.start()
 
+    def _apply_pane_heights(self) -> None:
+        """Give the three panes exactly the 55 : 25 : 20 share of the canvas height.
+
+        Layout stretch factors only distribute the space left over after each
+        row's own size hint, which skews the split; fixed row heights do not.
+        """
+        layout = self.canvas.ci.layout
+        _, top, _, bottom = layout.getContentsMargins()
+        available = self.canvas.height() - top - bottom - 2.0 * layout.verticalSpacing()
+        if available < 150:
+            return
+        heights = [round(available * share / sum(PANE_STRETCH)) for share in PANE_STRETCH]
+        heights[2] = int(available) - heights[0] - heights[1]
+        if heights != self._pane_heights:
+            self._pane_heights = heights
+            for row, height in enumerate(heights):
+                layout.setRowFixedHeight(row, height)
+
     def _layout_overlays(self) -> None:
+        self._apply_pane_heights()
         for plot, header in zip(self.plots, self.headers, strict=True):
             rect = plot.sceneBoundingRect()
             header.setGeometry(int(rect.left()), int(rect.top()), int(rect.width()), HEADER_HEIGHT)
@@ -617,7 +637,7 @@ class ChartWorkspace(QtWidgets.QWidget):
         if i <= 0:
             return 0
         if i >= n:
-            return n - 1
+            return int(n - 1)
         nearer_right = bool((self._x[i] - x) < (x - self._x[i - 1]))
         return i if nearer_right else i - 1
 

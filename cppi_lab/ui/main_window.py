@@ -84,6 +84,17 @@ SCENARIOS: tuple[Scenario, ...] = (
 CRASH_SCENARIO = SCENARIOS[1]
 
 
+class ElasticComboBox(QtWidgets.QComboBox):
+    """A combo box that shows its full text when there is room and yields when not."""
+
+    def minimumSizeHint(self) -> QtCore.QSize:
+        return QtCore.QSize(120, super().minimumSizeHint().height())
+
+    def sizeHint(self) -> QtCore.QSize:
+        hint = super().sizeHint()
+        return QtCore.QSize(min(hint.width() + 8, 340), hint.height())
+
+
 class _EnsembleSignals(QtCore.QObject):
     finished = QtCore.Signal(int, object)
 
@@ -297,18 +308,14 @@ class MainWindow(QtWidgets.QMainWindow):
         brand.setObjectName("brand")
         brand_accent = QtWidgets.QLabel("-Lab", bar)
         brand_accent.setObjectName("brandAccent")
-        self.dataset_combo = QtWidgets.QComboBox(bar)
-        self.dataset_combo.setMinimumWidth(250)
+        self.dataset_combo = ElasticComboBox(bar)
         self.dataset_combo.setAccessibleName("Dataset")
         self.dataset_combo.activated.connect(self._on_dataset_chosen)
         self.import_button = QtWidgets.QPushButton("Import CSV / Parquet…", bar)
         self.import_button.clicked.connect(self._choose_import)
         self.sync_button = QtWidgets.QPushButton("Coinbase Sync…", bar)
         self.sync_button.clicked.connect(self._open_sync_dialog)
-        self.scenario_combo = QtWidgets.QComboBox(bar)
-        self.scenario_combo.setMinimumWidth(280)
-        self.scenario_combo.setMaximumWidth(330)
-        self.dataset_combo.setMaximumWidth(330)
+        self.scenario_combo = ElasticComboBox(bar)
         self.scenario_combo.setAccessibleName("Scenario")
         self.scenario_combo.addItem("Scenario…")
         for scenario in SCENARIOS:
@@ -321,6 +328,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.norm_chip.hide()
         self.status_chip = QtWidgets.QLabel("", bar)
         self.status_chip.setObjectName("statusChip")
+        # The read-out gives way first when the window is narrow.
+        self.status_chip.setMinimumWidth(0)
+        self.status_chip.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Ignored, QtWidgets.QSizePolicy.Policy.Preferred
+        )
+        self.status_chip.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter
+        )
         self.ledger_button = self._dock_button("Ledger", "Tabular data ledger (Ctrl+L)")
         self.docs_button = self._dock_button("Documentation", "Documentation workbench (F1)")
         row = QtWidgets.QHBoxLayout(bar)
@@ -336,8 +351,7 @@ class MainWindow(QtWidgets.QMainWindow):
         row.addSpacing(6)
         row.addWidget(self.scenario_combo)
         row.addWidget(self.norm_chip)
-        row.addStretch(1)
-        row.addWidget(self.status_chip)
+        row.addWidget(self.status_chip, 10)
         row.addSpacing(6)
         row.addWidget(self.ledger_button)
         row.addWidget(self.docs_button)
@@ -403,7 +417,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 f"Exported {rows:,} rows to {path}", 8000
             )
         )
-        self.ledger_dock = self._make_dock("Tabular Data Ledger", self.ledger, self.ledger_button)
+        self.ledger_dock = self._make_dock(
+            "Tabular Data Ledger", self.ledger, self.ledger_button, QtCore.QSize(1060, 470)
+        )
 
         self.docs: QtWidgets.QWidget
         if self._use_web:
@@ -412,12 +428,18 @@ class MainWindow(QtWidgets.QMainWindow):
             self.docs = DocWorkbench(self.registry)
         else:
             self.docs = QtWidgets.QLabel("Documentation requires QtWebEngine.")
-        self.docs_dock = self._make_dock("Documentation Workbench", self.docs, self.docs_button)
+        self.docs_dock = self._make_dock(
+            "Documentation Workbench", self.docs, self.docs_button, QtCore.QSize(1180, 720)
+        )
         self.statusBar().setSizeGripEnabled(False)
         self.statusBar().setFixedHeight(20)
 
     def _make_dock(
-        self, title: str, widget: QtWidgets.QWidget, button: QtWidgets.QToolButton
+        self,
+        title: str,
+        widget: QtWidgets.QWidget,
+        button: QtWidgets.QToolButton,
+        float_size: QtCore.QSize,
     ) -> ads.CDockWidget:
         dock = ads.CDockWidget(self.dock_manager, title)
         dock.setWidget(widget)
@@ -426,12 +448,12 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         dock.setMinimumSize(320, 180)
         dock._opened_once = False
-        dock._float_size = widget.size()
+        dock._float_size = float_size
         # Register with the manager, then keep it closed until first requested.
         self.dock_manager.addDockWidget(ads.DockWidgetArea.BottomDockWidgetArea, dock)
         dock.toggleView(False)
         dock.viewToggled.connect(button.setChecked)
-        button.clicked.connect(partial(self._on_dock_button, dock))
+        button.clicked.connect(partial(self._on_dock_button, dock, button))
         menu = QtWidgets.QMenu(button)
         menu.addAction("Float (always on top)", partial(self.float_dock, dock))
         menu.addSeparator()
@@ -460,8 +482,11 @@ class MainWindow(QtWidgets.QMainWindow):
         bind("Escape", lambda: self.popovers.close_all())
 
     # -- docking -------------------------------------------------------------------
-    def _on_dock_button(self, dock: ads.CDockWidget, checked: bool) -> None:
-        self.set_dock_visible(dock, checked)
+    def _on_dock_button(
+        self, dock: ads.CDockWidget, button: QtWidgets.QToolButton, *_: object
+    ) -> None:
+        # Qt may or may not pass the ``checked`` flag to a partial; read the button.
+        self.set_dock_visible(dock, button.isChecked())
 
     def set_dock_visible(self, dock: ads.CDockWidget, visible: bool) -> None:
         """Show or hide a secondary window; the first show floats it (TSD 4.2)."""
@@ -480,20 +505,47 @@ class MainWindow(QtWidgets.QMainWindow):
         if not dock.isFloating():
             dock.setFloating()
         self._apply_floating_flags(dock)
+        self._place_floating(dock)
+        # A window manager may reposition the window when it maps it; place it once more.
+        QtCore.QTimer.singleShot(80, partial(self._place_floating, dock))
+
+    def _place_floating(self, dock: ads.CDockWidget) -> None:
+        """Size a floating window and put it over the right part of the main window."""
         container = dock.floatingDockContainer()
-        if container is not None:
-            size: QtCore.QSize = dock._float_size
-            container.resize(size.width(), size.height() + 30)
-            origin = self.mapToGlobal(QtCore.QPoint(0, 0))
-            offset = 60 if dock is self.ledger_dock else 120
-            container.move(origin.x() + self.width() - size.width() - offset, origin.y() + offset)
-            container.raise_()
+        if container is None or not dock.isFloating():
+            return
+        size: QtCore.QSize = dock._float_size
+        container.resize(size.width(), size.height() + 30)
+        origin = self.mapToGlobal(QtCore.QPoint(0, 0))
+        offset = 70 if dock is self.ledger_dock else 130
+        container.move(
+            origin.x() + max(20, self.width() - size.width() - offset), origin.y() + offset
+        )
+        container.raise_()
 
     def dock_to(self, dock: ads.CDockWidget, area: ads.DockWidgetArea) -> None:
         """Dock a secondary window into a split panel of the main window."""
         dock._opened_once = True
         self.dock_manager.addDockWidget(area, dock)
         dock.toggleView(True)
+        # Size the panel once the new splitter has been laid out.
+        QtCore.QTimer.singleShot(0, partial(self._size_docked_panel, dock, area))
+
+    def _size_docked_panel(self, dock: ads.CDockWidget, area: ads.DockWidgetArea) -> None:
+        """Give a freshly docked panel a useful share; the chart reflows into the rest."""
+        target = dock.dockAreaWidget()
+        if target is None or dock.isFloating() or dock.isClosed():
+            return
+        if area == ads.DockWidgetArea.BottomDockWidgetArea:
+            total = self.dock_manager.height()
+            panel = min(max(220, total * 30 // 100), 380)
+            sizes = [total - panel, panel]
+        else:
+            total = self.dock_manager.width()
+            panel = min(max(420, total * 34 // 100), 700)
+            left = area == ads.DockWidgetArea.LeftDockWidgetArea
+            sizes = [panel, total - panel] if left else [total - panel, panel]
+        self.dock_manager.setSplitterSizes(target, sizes)
 
     def _apply_floating_flags(self, dock: ads.CDockWidget) -> None:
         """Window flags of TSD section 4.2 for a floating container."""
@@ -511,6 +563,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         geometry = container.geometry()
         container.setWindowFlags(current | wanted)
+        container.setWindowTitle(f"{dock.windowTitle()} - CPPI-Lab")
         container.setGeometry(geometry)
         container.show()
 

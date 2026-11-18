@@ -40,6 +40,36 @@ def _prefer_xcb_on_linux() -> None:
     os.environ["QT_QPA_PLATFORM"] = "xcb"
 
 
+def _running_under_wsl() -> bool:
+    if os.environ.get("WSL_DISTRO_NAME"):
+        return True
+    try:
+        return "microsoft" in Path("/proc/sys/kernel/osrelease").read_text().lower()
+    except OSError:
+        return False
+
+
+def _use_software_web_rendering_under_wsl() -> None:
+    """Render documentation pages in software under WSL.
+
+    WSLg's D3D12-backed EGL has no ``EGL_EXT_image_dma_buf_import``, which
+    QtWebEngine's GPU compositor needs to hand frames to Qt; with it enabled
+    every page comes out blank ("Compositor returned null texture").  The
+    pages are static text and mathematics, so software rasterisation costs
+    nothing visible.  An explicit ``QTWEBENGINE_CHROMIUM_FLAGS`` always wins.
+    """
+    if not sys.platform.startswith("linux") or "QTWEBENGINE_CHROMIUM_FLAGS" in os.environ:
+        return
+    if _running_under_wsl():
+        os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu"
+
+
+def configure_environment() -> None:
+    """Process-level settings that must be in place before Qt is imported."""
+    _prefer_xcb_on_linux()
+    _use_software_web_rendering_under_wsl()
+
+
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="cppi-lab",
@@ -68,7 +98,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(sys.argv[1:] if argv is None else argv)
-    _prefer_xcb_on_linux()
+    configure_environment()
 
     from PySide6 import QtCore, QtGui, QtWidgets
 

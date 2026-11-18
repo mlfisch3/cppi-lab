@@ -70,7 +70,7 @@ def compute_kpis(run: RunOutput, ensemble: EnsembleResult | None = None) -> dict
     elif stats.liquidations > 0:
         status = KpiValue("LIQUIDATED", f"exit at trigger, V ≥ F · ×{stats.liquidations}", "warn")
     else:
-        status = KpiValue("INTACT", f"F = {_usd(floor)} · 0 breaches", "good")
+        status = KpiValue("INTACT", f"no breach · F {_usd(floor)}", "good")
     if ensemble is not None and stats.floor_breaches == 0:
         tone: Tone = "bad" if ensemble.floor_breaches else status.tone
         status = KpiValue(

@@ -46,7 +46,7 @@
       "tech": {
         "number": "2.1",
         "title": "Envelope Evaluation & Minimum Rebalance Quantum",
-        "summary": "Evaluation order of d, n_ceil and n_floor at the bar close, the Δn_min filter and the near-floor override inside the final $250."
+        "summary": "Evaluation order of d, n_ceil and n_floor at the bar close, the Δn_min filter and the near-floor override inside the final 250 USD."
       }
     },
     {
@@ -159,7 +159,7 @@
       "summary": "USD held at the first bar. It is part of the protected wealth and is also deployable: the envelope may spend it on BTC when the growth signal allows.",
       "math": "F = N_0 \\cdot P_{\\text{liq}} + c_0",
       "details": [
-        "Range $0 to $10,000,000, step $100."
+        "Range 0 to 10,000,000 USD, step 100 USD."
       ],
       "implementation": "Cash enters the recoverable inventory $n_{\\max,t} = n_t + c_t / (P_t(1+f_{\\text{eff}}))$ from the first bar.",
       "concept": "sec-1-floor-buffer"
@@ -171,7 +171,7 @@
       "math": "\\kappa = \\frac{P_{\\text{anchor}}}{O_0}, \\qquad (O_t, H_t, L_t, C_t) \\mapsto \\kappa \\, (O_t, H_t, L_t, C_t)",
       "details": [
         "Percentage returns, volatility clustering and the taker-flow imbalance are preserved exactly; volumes stay in BTC and are not touched.",
-        "Absolute USD constants of the model (the 1 USD ATR floor, the $250 near-floor zone) are <em>not</em> rescaled, so a window rescaled by a large factor is a stress test, not a replay.",
+        "Absolute USD constants of the model (the 1 USD ATR floor, the 250 USD near-floor zone) are <em>not</em> rescaled, so a window rescaled by a large factor is a stress test, not a replay.",
         "While it is on, the top bar shows the factor $\\kappa$ in an amber chip so rescaled prices are never mistaken for history."
       ],
       "implementation": "<code>MarketWindow.rescaled()</code> returns new price arrays and reuses the volume arrays; the raw dataset is never modified.",
@@ -183,9 +183,9 @@
       "summary": "The price below which the account must hold no BTC. The strategy guarantees a complete sale before the market trades below it, on every bar that does not gap.",
       "math": "P_{\\text{floor},t} = \\max\\!\\left(\\frac{P_{\\text{liq}}}{1-\\gamma},\\; \\frac{\\max(0,\\,F-c_t)}{n_t\\,(1-\\gamma)}\\right)",
       "details": [
-        "Range $1,000 to $250,000, step $250.",
+        "Range 1,000 to 250,000 USD, step 250 USD.",
         "The emergency sale is triggered at $P_{\\text{floor},t}$, not at $P_{\\text{liq}}$: the gap between them pays the taker fee and slippage of the exit.",
-        "Raising $P_{\\text{liq}}$ raises the floor value $F$ and pushes $P_{\\text{ref}}$ up if it would otherwise sit less than $1,000 above it."
+        "Raising $P_{\\text{liq}}$ raises the floor value $F$ and pushes $P_{\\text{ref}}$ up if it would otherwise sit less than 1,000 USD above it."
       ],
       "implementation": "",
       "concept": "sec-1-floor-buffer"
@@ -196,7 +196,7 @@
       "summary": "The price at and above which the envelope allows full allocation. Between the trigger and $P_{\\text{ref}}$ the permitted holding grows linearly.",
       "math": "d_t = \\operatorname{clip}\\!\\left(\\frac{P_t - P_{\\text{floor},t}}{\\max(P_{\\text{ref}} - P_{\\text{floor},t},\\,1)},\\,0,\\,1\\right)",
       "details": [
-        "Range $P_{\\text{liq}} + \\$1{,}000$ to $350,000, step $500.",
+        "Range $P_{\\text{liq}} + 1{,}000$ USD to 350,000 USD, step 500 USD.",
         "A narrow band makes $d_t$ steep: small price moves produce large rebalances.",
         "Above $P_{\\text{ref}}$ the ceiling equals $n_{\\max}$, so no sell is ever requested there."
       ],
@@ -210,7 +210,7 @@
       "math": "\\Delta n_{\\text{eff},t} = \\begin{cases} 0 & P_t \\le P_{\\text{floor},t} + 250 \\\\ \\Delta n_{\\min} & \\text{otherwise} \\end{cases}",
       "details": [
         "Range 0.1 % to 25 %, step 0.25 %.",
-        "Sells inside the last $250 above the trigger ignore it, so the position can always be reduced to zero.",
+        "Sells inside the last 250 USD above the trigger ignore it, so the position can always be reduced to zero.",
         "Buys always respect it; a purchase the rebuy cap would shrink below it is not placed."
       ],
       "implementation": "",
@@ -248,7 +248,7 @@
       "math": "\\Delta P_{\\text{buf},0} = P_{\\text{liq}} \\cdot \\frac{\\gamma}{1-\\gamma}",
       "details": [
         "Range 0 % to 2 %, step 0.01 %.",
-        "At the defaults $\\gamma = 0.40\\,\\%$ and the baseline buffer is $240.96 above a $60,000 floor."
+        "At the defaults $\\gamma = 0.40\\,\\%$ and the baseline buffer is 240.96 USD above a 60,000 USD floor."
       ],
       "implementation": "",
       "concept": "sec-1-floor-buffer"

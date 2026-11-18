@@ -81,6 +81,9 @@ TELEMETRY_DTYPE = np.dtype(
     ]
 )
 
+#: Field names of :data:`TELEMETRY_DTYPE`, in column order.
+TELEMETRY_FIELDS: tuple[str, ...] = tuple(TELEMETRY_DTYPE.names or ())
+
 # Event codes (TSD section 3.1).
 EVENT_NONE = 0
 EVENT_MAKER_SELL = 1

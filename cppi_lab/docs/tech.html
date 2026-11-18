@@ -1,5 +1,586 @@
-<!doctype html><html lang="en" data-volume="tech"><head><meta charset="utf-8"><title>Technical Implementation Documentation</title>
-<link rel="stylesheet" href="assets/katex/katex.min.css"><link rel="stylesheet" href="assets/docs.css">
-<script src="assets/katex/katex.min.js"></script><script src="assets/katex/auto-render.min.js"></script><script src="assets/qwebchannel.js"></script></head>
-<body><nav id="toc"><div class="volume">tech</div><h2>Technical Implementation Documentation</h2><a href="#sec-1-floor-buffer"><b>1.1</b>Floor & Safety Buffer State Kernel</a><a href="#sec-1-whipsaw-cost"><b>1.2</b>Cushion & Recoverable BTC Accounting</a><a href="#sec-2-dual-envelope"><b>2.1</b>Envelope Evaluation & Minimum Rebalance Quantum</a><a href="#sec-2-4-rho"><b>2.2</b>Order Routing Engine (route_order_by_rho)</a><a href="#sec-3-liquidity"><b>3.1</b>Stochastic Fill Sampler & PCG64 Seeding</a><a href="#sec-4-signals"><b>4.1</b>Vectorized Signal Pipeline</a><a href="#sec-5-state-machine"><b>5.1</b>Numba State-Machine Loop & Telemetry Schema</a><a href="#sec-6-workbench"><b>6.1</b>Data Engine, Recalculation Pipeline & UI Event Bindings</a></nav><main><h1><small>CPPI-Lab</small>Technical Implementation Documentation</h1><section id="sec-1-floor-buffer" data-concept-id="sec-1-floor-buffer"><h2><span class="num">§1.1</span>Floor & Safety Buffer State Kernel</h2><a class="xref" href="cppidoc://theory/#sec-1-floor-buffer">↔ counterpart</a><p>Exact float64 computation of p_floor and safety_buf_usd, and why the intra-bar low[t] <= p_floor check runs before anything else.</p><p>$$V_t \ge F$$</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p></section><section id="sec-1-whipsaw-cost" data-concept-id="sec-1-whipsaw-cost"><h2><span class="num">§1.2</span>Cushion & Recoverable BTC Accounting</h2><a class="xref" href="cppidoc://theory/#sec-1-whipsaw-cost">↔ counterpart</a><p>How n_max, the cushion and the cumulative fee and slippage bleed are computed, and the rebuy cap that keeps a purchase cushion-funded.</p><p>$$V_t \ge F$$</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p></section><section id="sec-2-dual-envelope" data-concept-id="sec-2-dual-envelope"><h2><span class="num">§2.1</span>Envelope Evaluation & Minimum Rebalance Quantum</h2><a class="xref" href="cppidoc://theory/#sec-2-dual-envelope">↔ counterpart</a><p>Evaluation order of d, n_ceil and n_floor at the bar close, the Δn_min filter and the near-floor override inside the final $250.</p><p>$$V_t \ge F$$</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p></section><section id="sec-2-4-rho" data-concept-id="sec-2-4-rho"><h2><span class="num">§2.2</span>Order Routing Engine (route_order_by_rho)</h2><a class="xref" href="cppidoc://theory/#sec-2-4-rho">↔ counterpart</a><p>Exact branching for ρ = 0, 0 < ρ < 1 and ρ = 1, the miss counter m_miss, and the maker-dominance guard.</p><p>$$V_t \ge F$$</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p></section><section id="sec-3-liquidity" data-concept-id="sec-3-liquidity"><h2><span class="num">§3.1</span>Stochastic Fill Sampler & PCG64 Seeding</h2><a class="xref" href="cppidoc://theory/#sec-3-liquidity">↔ counterpart</a><p>Implementation of λ_liq, β_vel and α_size, the per-bar PCG64 uniform vector, and the parallel Monte Carlo ensemble.</p><p>$$V_t \ge F$$</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p></section><section id="sec-4-signals" data-concept-id="sec-4-signals"><h2><span class="num">§4.1</span>Vectorized Signal Pipeline</h2><a class="xref" href="cppidoc://theory/#sec-4-signals">↔ counterpart</a><p>The O(T) array passes for EMA, ATR, rolling sums and extrema, the CLV volume fallback, and the conventions at the start of a window.</p><p>$$V_t \ge F$$</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p></section><section id="sec-5-state-machine" data-concept-id="sec-5-state-machine"><h2><span class="num">§5.1</span>Numba State-Machine Loop & Telemetry Schema</h2><a class="xref" href="cppidoc://theory/#sec-5-state-machine">↔ counterpart</a><p>The compiled loop step by step, the 26-field telemetry row, event priority within a bar, and the floating-point guards.</p><p>$$V_t \ge F$$</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p></section><section id="sec-6-workbench" data-concept-id="sec-6-workbench"><h2><span class="num">§6.1</span>Data Engine, Recalculation Pipeline & UI Event Bindings</h2><a class="xref" href="cppidoc://theory/#sec-6-workbench">↔ counterpart</a><p>Parquet schema and importers, the cached recalculation pipeline and its latency, the chart renderer, the ledger model and the popover timers.</p><p>$$V_t \ge F$$</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p><p>stub</p></section></main>
-<div id="snippet-card"><div class="vol"></div><div class="ttl"></div><div class="sum"></div></div><script src="assets/doc_sync.js"></script></body></html>
+<!doctype html>
+<html lang="en" data-volume="tech">
+<head>
+<meta charset="utf-8">
+<title>CPPI-Lab - Technical Implementation Documentation</title>
+<link rel="stylesheet" href="assets/katex/katex.min.css">
+<link rel="stylesheet" href="assets/docs.css">
+<script src="assets/katex/katex.min.js"></script>
+<script src="assets/katex/auto-render.min.js"></script>
+<script src="assets/qwebchannel.js"></script>
+</head>
+<body>
+<nav id="toc">
+  <div class="volume">Volume II · Implementation</div>
+  <h2>Technical Implementation Documentation</h2>
+  <a href="#sec-1-floor-buffer"><b>1.1</b>Floor &amp; safety buffer kernel</a>
+  <a href="#sec-1-whipsaw-cost"><b>1.2</b>Cushion &amp; recoverable BTC accounting</a>
+  <a href="#sec-2-dual-envelope"><b>2.1</b>Envelope evaluation &amp; rebalance quantum</a>
+  <a href="#sec-2-4-rho"><b>2.2</b>Order routing engine</a>
+  <a href="#sec-3-liquidity"><b>3.1</b>Fill sampler &amp; PCG64 seeding</a>
+  <a href="#sec-4-signals"><b>4.1</b>Vectorized signal pipeline</a>
+  <a href="#sec-5-state-machine"><b>5.1</b>State-machine loop &amp; telemetry</a>
+  <a href="#sec-6-workbench"><b>6.1</b>Data engine, pipeline &amp; UI bindings</a>
+</nav>
+
+<main>
+<h1><small>CPPI-Lab · Volume II</small>Technical Implementation Documentation</h1>
+<p class="lead">How each idea of the Theoretical Strategy Documentation is computed: the
+Numba kernels, the data schemas, the floating-point guards, the random-number
+architecture and the user-interface bindings. Module paths are relative to the
+<code>cppi_lab</code> package. Every section links back to the theory it implements.</p>
+
+<!-- ===================================================================== -->
+<section id="sec-1-floor-buffer" data-concept-id="sec-1-floor-buffer">
+<h2><span class="num">§1.1</span>Floor &amp; Safety Buffer State Kernel</h2>
+<a class="xref" href="cppidoc://theory/#sec-1-floor-buffer">↔ Theory §1.1 · CPPI Invariant Wealth Floor &amp; Safety Buffer Derivation</a>
+
+<p>The trigger is a pure function of the two state variables. It lives in
+<code>engine/kernel_numba.py</code> and is compiled once and inlined into the main loop:</p>
+<pre><code>@njit(cache=True, nogil=True)
+def trigger_price(n, c, floor_value, base_floor, keep):
+    if n &gt; QTY_EPS:                      # 1e-8 BTC
+        need = floor_value - c
+        if need &lt; 0.0:
+            need = 0.0
+        required = need / (n * keep)      # (F - c) / (n (1 - gamma))
+        if required &gt; base_floor:
+            return required
+    return base_floor                     # P_liq / (1 - gamma)</code></pre>
+<p>The loop-invariant scalars are computed once per run: <code>gamma = f_taker +
+delta_slip</code>, <code>keep = 1.0 - gamma</code>, <code>floor_value = n0 * p_liq + c0</code>
+and <code>base_floor = p_liq / keep</code>.</p>
+
+<h3>Execution priority inside a bar</h3>
+<p>Step 1 of every bar calls <code>trigger_price</code> on the state left by the previous
+bar. Step 2 tests the bar's low against it before anything else is allowed to touch the
+position:</p>
+<pre><code>p_floor = trigger_price(n, c, floor_value, base_floor, keep)        # step 1
+if n &gt; QTY_EPS and l_t &lt;= p_floor:                                   # step 2
+    p_trig = p_floor
+    if o_t &lt; p_floor:              # the bar opened through the trigger: a gap
+        p_trig = o_t
+        ...record the gap bar...
+    c = c + n * p_trig * keep      # c_t = c_{t-1} + n_{t-1} P_trig (1 - gamma)
+    n = 0.0
+    ...cancel the resting order, reset the miss counter, event = 7...</code></pre>
+<p>The comparison is <code>&lt;=</code>: a low that merely touches the trigger fires it.
+The cash update is the single expression of TSD §3.1; the reported execution price is
+<code>p_trig * (1 - delta_slip)</code> and the reported cost is
+<code>n * p_trig * gamma</code>.</p>
+
+<h3>Telemetry</h3>
+<table>
+<tr><th>Field</th><th>Value</th></tr>
+<tr><td><code>p_floor</code></td><td>The step-1 trigger of the bar, i.e. computed from $(n_{t-1}, c_{t-1})$.</td></tr>
+<tr><td><code>safety_buf_usd</code></td><td><code>p_floor - p_liq</code>.</td></tr>
+<tr><td><code>net_equity_usd</code></td><td><code>c + n * close * keep</code> on the end-of-bar state.</td></tr>
+</table>
+
+<h3>Precision</h3>
+<p>All accounting is IEEE-754 <code>float64</code>. When the second term of the maximum
+binds, the exit proceeds are $n \cdot \frac{F-c}{n(1-\gamma)} \cdot (1-\gamma)$, which
+equals $F - c$ only up to rounding: a few units in the last place, about $10^{-11}$ USD for
+a 60,000 USD floor and about $10^{-7}$ at the top of the allowed ranges. This is why the
+conservation assertion is $V_t \ge F - 10^{-6}$ (<code>FLOOR_TOLERANCE_USD</code>) and not a
+strict inequality. The kernel is compiled without <code>fastmath</code>
+(<a class="inline-xref" href="#sec-5-state-machine">§5.1</a>), so the comparison
+<code>l_t &lt;= p_floor</code> means the same thing on every platform.</p>
+</section>
+
+<!-- ===================================================================== -->
+<section id="sec-1-whipsaw-cost" data-concept-id="sec-1-whipsaw-cost">
+<h2><span class="num">§1.2</span>Cushion &amp; Recoverable BTC Accounting</h2>
+<a class="xref" href="cppidoc://theory/#sec-1-whipsaw-cost">↔ Theory §1.2 · Whipsaw Decay as Dynamic Put Replication Cost</a>
+
+<h3>Recoverable inventory and cushion</h3>
+<pre><code>f_eff = (1.0 - rho) * f_maker + rho * f_taker        # once per run
+n_max = n + c / (c_t * (1.0 + f_eff))                # every bar, at the close
+v_t    = c + n * c_t * keep
+margin = v_t - floor_value
+row.cushion_usd = margin if margin &gt; 0.0 else 0.0    # C_t = max(0, V_t - F)</code></pre>
+<p><code>n_max</code> is recomputed from scratch every bar from the two state variables;
+nothing is accumulated, so there is no drift to correct.</p>
+
+<h3>Cost bookkeeping</h3>
+<p>Every execution adds its explicit cost to the bar's <code>fee_paid_usd</code> and to one
+of two run totals:</p>
+<table>
+<tr><th>Execution</th><th>Cash change</th><th>Cost recorded</th></tr>
+<tr><td>Maker sell of $q$ at $P_{\text{lim}}$</td><td>$+q P_{\text{lim}}(1 - f_{\text{maker}})$</td><td>$q P_{\text{lim}} f_{\text{maker}}$</td></tr>
+<tr><td>Maker buy of $q$ at $P_{\text{lim}}$</td><td>$-q P_{\text{lim}}(1 + f_{\text{maker}})$</td><td>$q P_{\text{lim}} f_{\text{maker}}$</td></tr>
+<tr><td>Taker sell of $q$ at the close $C_t$</td><td>$+q C_t (1 - \gamma)$</td><td>$q C_t \gamma$</td></tr>
+<tr><td>Taker buy of $q$ at the close $C_t$</td><td>$-q C_t (1 + \gamma)$</td><td>$q C_t \gamma$</td></tr>
+<tr><td>Emergency exit of $n$ at $P_{\text{trig}}$</td><td>$+n P_{\text{trig}}(1 - \gamma)$</td><td>$n P_{\text{trig}} \gamma$</td></tr>
+</table>
+<p>Taker friction is additive, matching the emergency formula: fee and slippage are both
+charged on the notional at the reference price. The run totals
+<code>STAT_MAKER_FEES_USD</code> and <code>STAT_TAKER_COSTS_USD</code> feed the
+<em>Fees + Slippage</em> card, and the sum of the <code>fee_paid_usd</code> column equals
+their sum exactly; the test-suite asserts it. Cumulative whipsaw bleed is therefore
+available three ways: as dollars of explicit cost, as the fall of <code>n_max</code> below
+$N_0$, and as the fall of <code>cushion_usd</code>.</p>
+
+<h3>The rebuy cap</h3>
+<p>The cap of Theory §1.2 and §2.1 is <code>rebuy_cap()</code>. Its feasibility test evaluates
+the envelope on the state a purchase of $q$ would create:</p>
+<pre><code>def _post_buy_slack(q, n, c, price, unit_cost, ...):
+    c_post = c - q * unit_cost
+    if c_post &lt; 0.0:
+        return -1.0                                  # cannot be paid for
+    n_post = n + q
+    floor_post = trigger_price(n_post, c_post, floor_value, base_floor, keep)
+    span = max(p_ref - floor_post, 1.0)
+    d_post = clip01((price - floor_post) / span)
+    n_max_post = n_post + c_post / (price * (1.0 + f_eff))
+    return sell_ceiling(n_max_post, d_post, k_sell, s_down) - n_post   # &gt;= 0 is feasible</code></pre>
+<p><code>unit_cost</code> is the dearer of the two routes,
+<code>price * (1 + max(gamma, f_maker))</code>, so the cap covers the taker child and the
+maker child of a split order together. <code>rebuy_cap(target, minimum, ...)</code> then
+proceeds in three steps:</p>
+<ol>
+<li>the target, limited to what cash can pay, is tried first and returned if feasible
+(one evaluation, the normal case);</li>
+<li>otherwise the minimum quantum $\Delta n_{\min}$ is tried, and zero is returned if even
+that is infeasible (two evaluations, the cash-locked case, which would otherwise be
+re-solved on every bar);</li>
+<li>otherwise a 40-step bisection (<code>CAP_ITERATIONS</code>) between the feasible minimum
+and the infeasible target converges on the edge. The lower end is returned, so the result
+is always feasible whatever the shape of the slack function.</li>
+</ol>
+<p>A capped quantity below $\Delta n_{\min}$ is discarded rather than traded.</p>
+</section>
+
+<!-- ===================================================================== -->
+<section id="sec-2-dual-envelope" data-concept-id="sec-2-dual-envelope">
+<h2><span class="num">§2.1</span>Envelope Evaluation &amp; Minimum Rebalance Quantum</h2>
+<a class="xref" href="cppidoc://theory/#sec-2-dual-envelope">↔ Theory §2.1 · Dual-Envelope Control Law &amp; Hysteresis Deadband</a>
+
+<p>Step 4 of the bar evaluates the control law at the close. This is the code, lightly
+abridged:</p>
+<pre><code>n_max = n + c / (c_t * (1.0 + f_eff))
+span = p_ref - p_floor
+if span &lt; 1.0:
+    span = 1.0
+d = clip01((c_t - p_floor) / span)
+n_ceil = sell_ceiling(n_max, d, k_sell, sd)      # n_max * d * max(0, 1 - k (1 - d) S_down)
+n_rebuy = n_max * d * su
+if n_rebuy &gt; n_ceil:
+    n_rebuy = n_ceil
+
+dn_eff = dn_min
+if c_t &lt;= p_floor + NEAR_FLOOR_ZONE_USD:         # 250 USD
+    dn_eff = 0.0
+if n &gt; n_ceil and (n - n_ceil) &gt;= dn_eff:
+    side, dn = SELL, n - n_ceil
+elif n &lt; n_rebuy and sd &lt; BUY_DECLINE_VETO and (n_rebuy - n) &gt;= dn_min:   # 0.25
+    dn = rebuy_cap(n_rebuy - n, dn_min, ...)
+    if dn &gt;= dn_min:
+        side = BUY</code></pre>
+
+<h3>Points the formulas leave open</h3>
+<table>
+<tr><th>Question</th><th>Implementation</th></tr>
+<tr><td>Which trigger enters $d_t$?</td><td>The step-1 value of the bar, as TSD §3.1 defines $P_{\text{floor},t}$. If a maker fill moved the state earlier in the same bar, $d_t$ is one bar stale and corrects itself at the next close; the rebuy cap always uses a freshly computed trigger.</td></tr>
+<tr><td>$k_{\text{sell}} &gt; 1$ can make the bracket negative.</td><td><code>sell_ceiling()</code> floors it at zero, so $n_{\text{ceil}} \ge 0$.</td></tr>
+<tr><td>Large $k_{\text{sell}}$ with $\tau_{\text{veto}}$ near 1 can put the rebuy floor above the ceiling.</td><td><code>n_rebuy</code> is capped at <code>n_ceil</code>; the band can close but not invert.</td></tr>
+<tr><td>Sell and buy criteria both true.</td><td>Cannot happen once the band is ordered; the sell test is evaluated first.</td></tr>
+<tr><td>Dust.</td><td>An order is placed only if <code>dn &gt; QTY_EPS</code>; child orders below <code>QTY_EPS</code> are dropped.</td></tr>
+<tr><td>$\Delta n_{\min}$ in BTC.</td><td><code>dn_min = dn_min_pct * n0</code>, fixed for the run.</td></tr>
+</table>
+
+<h3>Telemetry</h3>
+<p><code>d_norm</code>, <code>n_max</code>, <code>n_ceil</code> and <code>n_rebuy</code> are
+written on every bar, whether or not an order results, so pane 2 can draw the envelope
+continuously. <code>btc_held</code> is the end-of-bar holding, after any taker child of the
+bar has executed.</p>
+</section>
+
+<!-- ===================================================================== -->
+<section id="sec-2-4-rho" data-concept-id="sec-2-4-rho">
+<h2><span class="num">§2.2</span>Order Routing Engine (<code>route_order_by_rho</code>)</h2>
+<a class="xref" href="cppidoc://theory/#sec-2-4-rho">↔ Theory §2.2 · Continuous Risk-Aversion (ρ) &amp; Urgency Escalation Theory</a>
+
+<pre><code>@njit(cache=True, nogil=True)
+def execution_urgency(is_sell, d, s_down, s_up, m_miss):
+    if is_sell:
+        return 1.0 - d * (1.0 - s_down) * 0.5**m_miss
+    return s_up * (1.0 - 0.5 ** (m_miss + 1))
+
+@njit(cache=True, nogil=True)
+def taker_fraction(rho, urgency):
+    if rho &lt;= 0.0:
+        return 0.0                 # rho = 0: never a taker child
+    if rho &gt;= 1.0:
+        return 1.0                 # rho = 1: always all taker
+    if urgency &gt;= 1.0 - rho:
+        return 1.0                 # escalation
+    return rho                     # split
+
+@njit(cache=True, nogil=True)
+def route_order_by_rho(is_sell, dn, d, s_down, s_up, m_miss, rho, maker_dominated):
+    theta = taker_fraction(rho, execution_urgency(is_sell, d, s_down, s_up, m_miss))
+    if maker_dominated:            # f_maker &gt;= f_taker + delta_slip
+        theta = 1.0
+    q_taker = theta * dn
+    return q_taker, dn - q_taker</code></pre>
+<p>The branch order matters at the boundary: with $\rho = 0$ and $u_t = 1$ the escalation
+test $u_t \ge 1 - \rho$ would be true, and it is the earlier <code>rho &lt;= 0.0</code>
+branch that makes $\theta = 0$ hold identically, as TSD §2.4 requires. The maker child is
+computed as <code>dn - q_taker</code> rather than <code>(1 - theta) * dn</code> so the two
+children add up to the order exactly in floating point.</p>
+
+<h3>Children</h3>
+<ul>
+<li>A taker child above <code>QTY_EPS</code> executes immediately at the close: a sell nets
+<code>q * c_t * keep</code>, a buy costs <code>q * c_t * (1 + gamma)</code>. The reported
+price is $C_t(1 \mp \delta_{\text{slip}})$.</li>
+<li>A maker child above <code>QTY_EPS</code> becomes the single resting order
+<code>(pend_side, pend_qty, pend_px = c_t)</code>. It lives for exactly one bar: step 3 of the
+next bar fills or misses it, and step 4 of that bar posts a fresh one at the new close if
+the envelope still asks for a trade.</li>
+</ul>
+
+<h3>The miss counter</h3>
+<p><code>m_miss</code> counts consecutive misses <em>of the current rebalance</em>, tracked by
+<code>chain_side</code>:</p>
+<table>
+<tr><th>Event</th><th>Effect</th></tr>
+<tr><td>Maker order misses (step 3)</td><td><code>m_miss += 1</code></td></tr>
+<tr><td>Maker order fills (step 3)</td><td><code>m_miss = 0</code></td></tr>
+<tr><td>Step 4 places no order (the holding is back inside the band)</td><td><code>m_miss = 0</code>, <code>chain_side = 0</code></td></tr>
+<tr><td>Step 4 places an order on the other side</td><td><code>m_miss = 0</code>, <code>chain_side = side</code></td></tr>
+<tr><td>Emergency exit</td><td><code>m_miss = 0</code>, <code>chain_side = 0</code></td></tr>
+</table>
+<p>A full taker escalation leaves the counter alone: if the very next bar still needs to
+sell, it starts from the urgency already reached instead of posting a hopeful maker order
+again.</p>
+
+<h3>Verification</h3>
+<p><code>tests/test_routing.py</code> checks the three regimes on real windows: at
+$\rho = 0$ the only taker executions are code-7 liquidations; at $\rho = 1$ there are no
+maker fills and no misses; for interior values every split order has a taker child of
+exactly $\rho\,\Delta n$ and every escalated order has none left to post.</p>
+</section>
+
+<!-- ===================================================================== -->
+<section id="sec-3-liquidity" data-concept-id="sec-3-liquidity">
+<h2><span class="num">§3.1</span>Stochastic Fill Sampler &amp; PCG64 Seeding</h2>
+<a class="xref" href="cppidoc://theory/#sec-3-liquidity">↔ Theory §3.1 · Stochastic Order-Book Liquidity &amp; Pass-Through Theory</a>
+
+<h3>Fill probability</h3>
+<pre><code>@njit(cache=True, nogil=True)
+def fill_probability(is_sell, limit_px, qty, open_, high, low, close,
+                     opposing_vol, atr, lambda_liq, beta_vel, alpha_size):
+    if is_sell:
+        penetration = high - limit_px
+        adverse = open_ - close
+    else:
+        penetration = limit_px - low
+        adverse = close - open_
+    if penetration &lt;= 0.0:
+        return 0.0
+    if adverse &lt; 0.0:
+        adverse = 0.0
+    phi_pen = 1.0 - math.exp(-lambda_liq * (penetration / atr))
+    phi_vel = math.exp(-beta_vel * (adverse / atr))
+    absorb = max(0.01 * opposing_vol, 1e-8)
+    phi_size = 1.0 / (1.0 + (qty / absorb) ** alpha_size)
+    return clip01(phi_pen * phi_vel * phi_size)</code></pre>
+<p><code>atr</code> is <code>signals.atr[t]</code>: the decline-signal ATR already floored at
+1 USD by the signal pipeline. <code>opposing_vol</code> is <code>buy_vol[t]</code> for a
+resting sell and <code>sell_vol[t]</code> for a resting buy.</p>
+
+<h3>Resolution</h3>
+<pre><code>if p_fill &gt; 0.0 and u[t] &lt;= p_fill:
+    ...fill at pend_px, fee f_maker, m_miss = 0, event 1 or 3...
+else:
+    ...event 5 or 6, m_miss += 1...</code></pre>
+<p>The explicit <code>p_fill &gt; 0.0</code> guard matters because
+<code>Generator.random()</code> draws from $[0, 1)$: without it a variate of exactly 0.0
+would fill an order the bar never reached. Every attempt writes
+<code>p_fill_prob</code>; bars without an attempt carry NaN there, which is what pane 3 and
+the ledger use to tell "no order" from "zero probability". <code>u_rand_draw</code> holds
+$U_t$ on every bar.</p>
+
+<h3>Seeding</h3>
+<pre><code>def uniform_draws(seed, n_bars):
+    return np.random.Generator(np.random.PCG64(int(seed))).random(n_bars)</code></pre>
+<p>One vector of $T$ variates per run, indexed by bar. PCG64 and NumPy's double conversion
+are specified bit for bit, so a seed gives the same vector on Linux, Windows and macOS;
+<code>tests/test_prng.py</code> pins the first values of seed 42. The controller caches the
+vector on <code>(seed, T)</code>, so dragging a strategy slider never redraws it.</p>
+
+<h3>Monte Carlo ensemble</h3>
+<p><code>engine/monte_carlo.py</code> runs the <em>same</em> compiled
+<code>simulate_core</code> once per member inside a parallel loop:</p>
+<pre><code>@njit(cache=True, nogil=True, parallel=True)
+def ensemble_core(..., u_block, ..., equity, stride, stats):
+    for m in prange(u_block.shape[0]):
+        simulate_core(..., u_block[m], ..., False, equity[m], stride, stats[m])</code></pre>
+<ul>
+<li><strong>Counter seeding.</strong> Member $m$ uses <code>PCG64(s_rng + m)</code>; member 0
+is the trajectory on screen, which <code>tests/test_monte_carlo.py</code> verifies bar for
+bar.</li>
+<li><strong>Draws.</strong> <code>draw_block()</code> fills the $M \times T$ block in a
+thread pool (NumPy releases the GIL while filling). For 30 days that is 4.32 million
+variates, 34.6 MB. Blocks up to 96 MB are cached by the controller; longer windows are
+processed in batches of at most 96 MB.</li>
+<li><strong>Telemetry is off.</strong> With <code>write_rows = False</code> the loop writes
+only $V_t$, sampled every <code>stride</code> bars with
+<code>stride = ceil(T / 43200)</code>, so the equity matrix never exceeds about 35 MB.</li>
+<li><strong>Percentiles.</strong> <code>percentile_band()</code> sorts each sample column in
+a second parallel loop and interpolates linearly between order statistics, matching
+<code>np.percentile</code>.</li>
+<li><strong>Threads.</strong> The OpenMP threading layer is requested first
+(<code>engine/__init__.py</code>). The user interface runs the ensemble on a worker thread
+and never starts a second one while the first is running; a request that arrives in the
+meantime marks the result stale and is served when the worker returns.</li>
+</ul>
+</section>
+
+<!-- ===================================================================== -->
+<section id="sec-4-signals" data-concept-id="sec-4-signals">
+<h2><span class="num">§4.1</span>Vectorized Signal Pipeline</h2>
+<a class="xref" href="cppidoc://theory/#sec-4-signals">↔ Theory §4.1 · Asymmetric Decline &amp; Growth Microstructure Signals</a>
+
+<p>Both signals depend only on the market window and ten parameters, so they are computed
+as whole arrays before the state machine starts (<code>engine/signals.py</code>) and reused
+until one of those inputs changes. Each building block is one linear pass.</p>
+<table>
+<tr><th>Function</th><th>Computes</th><th>Cost</th></tr>
+<tr><td><code>true_range</code></td><td>$\text{TR}_t$, with $\text{TR}_0 = H_0 - L_0$</td><td>$O(T)$</td></tr>
+<tr><td><code>ema(x, span)</code></td><td>$\mathcal{E}_W(X)_t$ with $\alpha = 2/(W+1)$</td><td>$O(T)$</td></tr>
+<tr><td><code>rolling_sum(x, w)</code></td><td>$\sum_{k=0}^{W-1} X_{t-k}$</td><td>$O(TW)$, $W \le 60$</td></tr>
+<tr><td><code>rolling_max</code> / <code>rolling_min</code></td><td>extrema over the last $W$ bars</td><td>$O(T)$, monotonic deque</td></tr>
+<tr><td><code>decline_components</code></td><td>$S_{\text{down}}, M_{\text{down}}, I_{\text{down}}$ and the floored ATR</td><td>$O(T)$</td></tr>
+<tr><td><code>growth_components</code></td><td>$S_{\text{up}}, M_{\text{up}}, B_{\text{up}}, G_{\text{veto}}$</td><td>$O(T)$</td></tr>
+</table>
+
+<h3>Implementation notes</h3>
+<ul>
+<li><strong>Rolling sums are recomputed, not updated.</strong> The usual add-the-new,
+subtract-the-old update accumulates rounding error over half a million bars. The window is
+at most 60 bars, so each sum is formed afresh, newest sample first. The result has no
+drift and agrees with the reference implementation to the last bit.</li>
+<li><strong>Rolling extrema use a monotonic deque</strong> held in a preallocated index
+array: each bar is pushed and popped at most once, so a 1,440-bar breakout window costs
+the same as a 30-bar one.</li>
+<li><strong>Start of the window.</strong> An EMA is seeded with its first sample,
+$\mathcal{E}_W(X)_0 = X_0$. Rolling sums and extrema use the bars available so far while
+the window is still filling. Signals never look at bars before $t = 0$, so a back-test
+depends only on the window it is given.</li>
+<li><strong>Constants.</strong> The normalisers 1.5 and 2.0, the 0.40 imbalance saturation
+and the 1 USD floors are module constants named after their role
+(<code>MOMENTUM_DOWN_ATR_MULT</code>, <code>IMBALANCE_SATURATION</code>,
+<code>ATR_FLOOR_USD</code>, …).</li>
+</ul>
+
+<h3>Synthesised taker volume</h3>
+<p>Sources without a taker split (Coinbase candles, plain OHLCV files) get one from the
+close location value in <code>data/loader.py</code>:</p>
+<pre><code>def clv_split(high, low, close, volume):
+    frac = np.clip((high - close) / np.maximum(high - low, 1e-8), 0.0, 1.0)
+    sell = volume * frac
+    return volume - sell, sell          # (buy, sell)</code></pre>
+<p>The resulting dataset is flagged <code>synthesized_flow=True</code> and the dataset
+selector says so, because the imbalance of such a file is a function of candle shape, not
+of recorded aggression.</p>
+
+<h3>Caching</h3>
+<p><code>SimulationController</code> keys the signal arrays on the market-window key plus
+the tuple of <code>SIGNAL_PARAM_KEYS</code>. Changing a fee, $\rho$, a liquidity parameter
+or the seed reuses them; only the kernel reruns.</p>
+</section>
+
+<!-- ===================================================================== -->
+<section id="sec-5-state-machine" data-concept-id="sec-5-state-machine">
+<h2><span class="num">§5.1</span>Numba State-Machine Loop &amp; Telemetry Schema</h2>
+<a class="xref" href="cppidoc://theory/#sec-5-state-machine">↔ Theory §5.1 · Discrete-Time Execution Model, Event Ordering &amp; Gap Risk</a>
+
+<p><code>simulate_core()</code> in <code>engine/kernel_numba.py</code> is one loop over the
+bars. Its body is the five steps of TSD §3.1 plus one sub-step.</p>
+<table>
+<tr><th>Step</th><th>Action</th><th>Events</th></tr>
+<tr><td>1</td><td><code>p_floor = trigger_price(n, c, …)</code> on the previous end state.</td><td></td></tr>
+<tr><td>2</td><td>If <code>n &gt; QTY_EPS and low &lt;= p_floor</code>: emergency taker sale of everything at <code>min(open, p_floor)</code>; cancel the resting order.</td><td>7</td></tr>
+<tr><td>3</td><td>If not liquidated and an order rests: compute <code>p_fill</code>, compare with <code>u[t]</code>, fill at the limit or record the miss.</td><td>1, 3, 5, 6</td></tr>
+<tr><td>3b</td><td>After a maker <em>buy</em> fill only: recompute the trigger on the new state; if <code>low &lt;= post_floor</code>, emergency sale at <code>min(limit, post_floor)</code>.</td><td>7</td></tr>
+<tr><td>4</td><td>Envelope at the close; route any order; execute the taker child; post the maker child.</td><td>2, 4</td></tr>
+<tr><td>5</td><td>Compute $V_t$, update the conservation statistics, write the telemetry row.</td><td></td></tr>
+</table>
+
+<h3>Telemetry schema</h3>
+<p>The kernel fills a contiguous NumPy structured array of dtype
+<code>TELEMETRY_DTYPE</code>. The chart and the ledger read the same memory; nothing is
+copied.</p>
+<table>
+<tr><th>#</th><th>Field</th><th>Type</th><th>Meaning</th></tr>
+<tr><td>0</td><td><code>bar_idx</code></td><td>int32</td><td>index $t$</td></tr>
+<tr><td>1</td><td><code>ts_utc_ms</code></td><td>int64</td><td>bar open time, epoch milliseconds UTC</td></tr>
+<tr><td>2-5</td><td><code>open high low close</code></td><td>float64</td><td>prices (after any rescaling)</td></tr>
+<tr><td>6-7</td><td><code>buy_vol sell_vol</code></td><td>float64</td><td>buyer- and seller-taker volume, BTC</td></tr>
+<tr><td>8-9</td><td><code>s_down s_up</code></td><td>float64</td><td>signals in $[0,1]$</td></tr>
+<tr><td>10-11</td><td><code>p_floor safety_buf_usd</code></td><td>float64</td><td>step-1 trigger and its distance above $P_{\text{liq}}$</td></tr>
+<tr><td>12-15</td><td><code>d_norm n_max n_ceil n_rebuy</code></td><td>float64</td><td>envelope at the close</td></tr>
+<tr><td>16-17</td><td><code>btc_held cash_usd</code></td><td>float64</td><td>end-of-bar state $n_t$, $c_t$</td></tr>
+<tr><td>18-19</td><td><code>net_equity_usd cushion_usd</code></td><td>float64</td><td>$V_t$ and $\max(0, V_t - F)$</td></tr>
+<tr><td>20</td><td><code>event_code</code></td><td>uint8</td><td>primary event of the bar, 0-7</td></tr>
+<tr><td>21-22</td><td><code>exec_qty_btc exec_px_usd</code></td><td>float64</td><td>size and price of the primary event (limit price for a miss); price is NaN when there is none</td></tr>
+<tr><td>23</td><td><code>fee_paid_usd</code></td><td>float64</td><td>fees and slippage of <em>all</em> executions of the bar</td></tr>
+<tr><td>24-25</td><td><code>p_fill_prob u_rand_draw</code></td><td>float64</td><td>$P_{\text{fill},t}$ (NaN without an attempt) and $U_t$</td></tr>
+</table>
+<p>The TSD calls this a 24-column buffer; the dtype it lists has 26 fields, and the dtype
+is what is implemented.</p>
+
+<h3>More than one event in a bar</h3>
+<p>The schema has one <code>event_code</code> per bar, but a bar can hold two events: a
+maker order resolved in step 3 and a taker child executed in step 4, which is the normal
+shape of an escalation. The row records the highest-priority one,</p>
+<p style="text-align:center"><code>7 liquidation &gt; 2, 4 taker fill &gt; 1, 3 maker fill &gt; 5, 6 miss</code></p>
+<p>and nothing is lost: a parallel <code>uint8</code> array <code>flags</code> carries one
+bit per event code (<code>1 &lt;&lt; (code - 1)</code>) for everything that happened in the
+bar. The chart markers, the ledger filters and the ledger's event label
+(<code>TAKER_SELL +MISS_SELL</code>) are all driven by the flags, and the counts on the KPI
+cards come from a statistics vector accumulated inside the loop, not from scanning the
+event column.</p>
+
+<h3>Conservation assertion</h3>
+<pre><code>margin = v_t - floor_value
+if not gapped:
+    if margin &lt; stats[STAT_MIN_MARGIN_USD]:
+        stats[STAT_MIN_MARGIN_USD] = margin
+    if margin &lt; -FLOOR_TOLERANCE_USD:          # 1e-6
+        stats[STAT_FLOOR_BREACHES] += 1.0</code></pre>
+<p><code>gapped</code> becomes true on the first bar whose open is below its trigger at a
+step-2 liquidation; that bar's index is <code>STAT_GAP_BAR</code>. A non-zero breach count
+on a run that never gapped would be a defect; the property tests drive the kernel through
+thousands of windows, seeds and parameter sets and require it to be zero.</p>
+
+<h3>Floating-point guards</h3>
+<ul>
+<li><strong>No <code>fastmath</code>.</strong> The kernels are decorated
+<code>@njit(cache=True, nogil=True)</code>. <code>fastmath</code> would let the compiler
+assume there are no NaNs, which the telemetry uses as a sentinel, and reorder arithmetic,
+which would make results differ between CPUs. Without it the kernel takes about 1.7 ms for
+43,200 bars against a 15 ms budget, so nothing is lost.</li>
+<li><strong>Bit-exact reference.</strong> <code>tests/reference.py</code> is a plain-Python
+interpreter of the same state machine, one method per step. The test-suite requires all 26
+fields and the flags to be <em>equal</em>, not close, across randomised windows, seeds and
+parameters.</li>
+<li><strong>Clamps.</strong> A maker sell fills <code>min(pend_qty, n)</code>; a maker buy
+fills at most what cash can pay; a taker sell is limited to <code>n</code>. Each is a no-op
+in exact arithmetic and protects against the last bit of rounding driving a balance
+negative.</li>
+<li><strong>Thresholds.</strong> <code>QTY_EPS = 1e-8</code> BTC decides "flat";
+<code>FLOOR_TOLERANCE_USD = 1e-6</code> decides "below the floor".</li>
+</ul>
+</section>
+
+<!-- ===================================================================== -->
+<section id="sec-6-workbench" data-concept-id="sec-6-workbench">
+<h2><span class="num">§6.1</span>Data Engine, Recalculation Pipeline &amp; UI Event Bindings</h2>
+<a class="xref" href="cppidoc://theory/#sec-6-workbench">↔ Theory §6.1 · Reading the Experiment</a>
+
+<h3>Data schema and sources</h3>
+<p>The bundled file <code>data/btc_usd_1m.parquet</code> is Zstd-compressed Parquet with
+seven columns: <code>timestamp_utc</code> (millisecond UTC datetime) and the
+<code>float64</code> columns <code>open</code>, <code>high</code>, <code>low</code>,
+<code>close</code>, <code>buy_taker_vol</code>, <code>sell_taker_vol</code>. It is built by
+<code>scripts/build_dataset.py</code> from the monthly BTCUSDT 1-minute kline archives at
+<code>data.binance.vision</code>, each verified against its published SHA-256 checksum;
+<code>sell_taker_vol</code> is total volume minus the exchange-reported taker buy volume.
+<code>data/loader.py</code> turns any supported source into a <code>MarketData</code> object
+of C-contiguous arrays and validates it: whole-minute timestamps, strictly positive finite
+prices, highs and lows that bracket open and close, non-negative volumes.</p>
+<table>
+<tr><th>Source layout</th><th>Detected by</th><th>Taker split</th></tr>
+<tr><td>CPPI-Lab canonical</td><td>the seven column names</td><td>as stored</td></tr>
+<tr><td>Binance klines (headed or headerless 12-column)</td><td><code>taker_buy_base_asset_volume</code></td><td>exchange-reported</td></tr>
+<tr><td>Binance aggTrades</td><td><code>is_buyer_maker</code></td><td>aggregated per minute; buyer-maker trades are taker sells</td></tr>
+<tr><td>Coinbase <code>market_trades</code></td><td><code>price, size, side, time</code></td><td>aggregated per minute; <code>side</code> is the maker side by default</td></tr>
+<tr><td>Coinbase candles / plain OHLCV</td><td><code>open, high, low, close, volume</code></td><td>synthesised from the close location value</td></tr>
+<tr><td>Coinbase Advanced Trade REST</td><td><code>fetch_coinbase_candles()</code></td><td>synthesised; public market endpoint, 350 candles per request</td></tr>
+</table>
+
+<h3>Recalculation pipeline</h3>
+<pre><code>ParamRow.valueChanged(key, value)
+  -&gt; ControlSidebar.paramChanged
+  -&gt; MainWindow._on_param_changed      controller.update(key, value)   # clamp, couple P_ref
+  -&gt; 0 ms single-shot timer            coalesces a burst of changes into one run
+  -&gt; MainWindow.recalculate()
+       controller.run()                window -&gt; signals -&gt; uniforms -&gt; kernel   (each cached)
+       sidebar.set_params(params)      controls mirror the constrained values
+       chart.set_run(run)              new arrays into the GPU layers and markers
+       kpis.set_kpis(compute_kpis(run))
+       ledger.set_result(result)       model reset; filter, sort and selection kept
+       if params.mc_fan: _request_ensemble()   worker thread -&gt; chart.set_ensemble()</code></pre>
+<p>Measured on the development machine (Intel i9-12900H, 16 logical CPUs, Linux under
+WSL2) for a 43,200-bar window; <code>benchmarks/bench_latency.py</code> reproduces the table
+anywhere.</p>
+<table>
+<tr><th>Stage</th><th>Budget</th><th>Measured median</th></tr>
+<tr><td>Single-trajectory kernel</td><td>≤ 15 ms</td><td>1.3 to 1.8 ms</td></tr>
+<tr><td>100-seed ensemble, kernel only</td><td rowspan="2">≤ 120 ms</td><td>12 to 21 ms on 16 threads</td></tr>
+<tr><td>100-seed ensemble incl. 4.32 M draws and percentiles</td><td>55 to 71 ms</td></tr>
+<tr><td>Parameter change to refreshed plots, cards and table</td><td>&lt; 50 ms</td><td>9 to 21 ms</td></tr>
+</table>
+
+<h3>Chart renderer</h3>
+<p><code>ui/chart_workspace.py</code> builds one <code>pyqtgraph.GraphicsLayoutWidget</code>
+with three plots at stretch 55 : 25 : 20 whose x axes are linked. Lines, steps and bands
+are <code>GLLayerItem</code> objects (<code>ui/chart_gl.py</code>). Each keeps its
+full-resolution arrays and, for the range in view, reduces them to at most two points per
+pixel - a min/max decimation for prices and holdings, a bucket mean for the fast
+oscillating signals and envelope edges - then tessellates the result into triangles in
+screen space and draws them with a small shader that smooths the edges and cuts dashes.
+Line weight and dashing therefore do not depend on the driver's line-width support, and
+the cost of a frame depends on the canvas width, not on the length of the back-test.
+Without an OpenGL viewport the same geometry is drawn with <code>QPainter</code>.</p>
+
+<h3>Ledger</h3>
+<p><code>TelemetryTableModel</code> (<code>ui/ledger_window.py</code>) is a
+<code>QAbstractTableModel</code> over the structured array. A view row is an entry of one
+<code>int64</code> index vector; filtering rebuilds it from the flags, sorting applies a
+stable <code>argsort</code> of the chosen column to it. Selecting a row emits
+<code>barActivated</code>, which moves the chart's selection line; clicking the chart emits
+<code>barSelected</code>, which selects and reveals the row. Export writes the rows
+currently shown, in display order, as CSV or Parquet.</p>
+
+<h3>Docking</h3>
+<p>The ledger and this documentation viewer are <code>CDockWidget</code> instances of the Qt
+Advanced Docking System. The first time one is opened it floats, and its container gets
+the flags <code>Tool | WindowStaysOnTopHint | WindowMinimizeButtonHint |
+WindowMaximizeButtonHint</code>, so it stays above the main window. Dragging its title bar
+over the main window shows the drop compass; the menu next to each toolbar button performs
+the same docking without a drag.</p>
+
+<h3>Popovers</h3>
+<p><code>RichPopoverManager</code> (<code>ui/popover_manager.py</code>) owns three precise
+single-shot timers: 150 ms from entering a <code>?</code> badge to showing the card, 300 ms
+of grace after leaving the badge or the card, and a short fade. Entering the card cancels
+the grace timer; <em>Pin</em> detaches the card into a movable one and a fresh transient
+card serves the next hover. The body is a page served from
+<code>cppidoc://popover/&lt;id&gt;</code> and rendered with the bundled KaTeX; clicking one of
+its links is intercepted in <code>acceptNavigationRequest</code> and forwarded to
+<code>MainWindow.open_documentation(volume, anchor)</code>.</p>
+
+<h3>Counterpart preview</h3>
+<p><code>DocWorkbench</code> (<code>ui/doc_workbench.py</code>) places two
+<code>QWebEngineView</code> instances in a splitter at 65 : 35. The script
+<code>assets/doc_sync.js</code> runs in both. In the primary view it finds the
+<code>&lt;section data-concept-id&gt;</code> at the reading line with an
+<code>IntersectionObserver</code> and calls <code>bridge.notifySectionFocused(id)</code> over
+a <code>QWebChannel</code>; hovering a <code>cppidoc://</code> link calls
+<code>bridge.notifyLinkHovered(volume, anchor)</code>. <code>DocSyncBridge</code> relays both
+to the workbench, which runs <code>cppiDoc.focusSection(id)</code> in the preview to scroll
+it to the counterpart and mark it with the left border. When the preview is collapsed the
+script asks <code>bridge.sectionSnippet()</code> for the title and summary and shows them in
+a floating card instead.</p>
+</section>
+</main>
+
+<div id="snippet-card"><div class="vol"></div><div class="ttl"></div><div class="sum"></div></div>
+<script src="assets/doc_sync.js"></script>
+</body>
+</html>

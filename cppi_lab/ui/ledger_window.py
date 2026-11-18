@@ -27,6 +27,7 @@ from cppi_lab.engine.kernel_numba import (
     FLAG_LIQUIDATION,
     FLAG_MISSED,
     TELEMETRY_DTYPE,
+    TELEMETRY_FIELDS,
     SimResult,
     event_bit,
 )
@@ -75,7 +76,7 @@ COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("p_fill_prob", "P_fill", "unit"),
     ("u_rand_draw", "U", "unit"),
 )
-assert tuple(c[0] for c in COLUMNS) == TELEMETRY_DTYPE.names
+assert tuple(c[0] for c in COLUMNS) == TELEMETRY_FIELDS
 
 _EVENT_COLOURS = {
     1: theme.MAKER_SELL,
@@ -356,6 +357,11 @@ class LedgerWidget(QtWidgets.QWidget):
         self._size_columns()
         self.table.selectionModel().currentRowChanged.connect(self._on_current_row)
         self.model.modelReset.connect(self._update_count)
+        self.empty_label = QtWidgets.QLabel("", self.table.viewport())
+        self.empty_label.setProperty("role", "muted")
+        self.empty_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.empty_label.setWordWrap(True)
+        self.empty_label.hide()
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -394,11 +400,32 @@ class LedgerWidget(QtWidgets.QWidget):
         self.model.set_filter(name)
         if bar >= 0:
             self.select_bar(bar)
+            # If the bar is filtered out the selection snaps to the nearest row
+            # shown; tell the chart so both keep pointing at the same bar.
+            snapped = self.current_bar()
+            if snapped >= 0 and snapped != bar:
+                self.barActivated.emit(snapped)
 
     def _update_count(self) -> None:
         shown = self.model.rowCount()
         total = int(self.model._telemetry.shape[0])
         self.count_label.setText(f"{shown:,} of {total:,} timesteps")
+        if shown == 0 and total > 0:
+            self.empty_label.setText(
+                f"No timestep of this back-test matches \u201c{self.model.filter_name}\u201d."
+            )
+            self._place_empty_label()
+            self.empty_label.show()
+        else:
+            self.empty_label.hide()
+
+    def _place_empty_label(self) -> None:
+        viewport = self.table.viewport()
+        self.empty_label.setGeometry(20, 30, max(100, viewport.width() - 40), 40)
+
+    def resizeEvent(self, event: QtGui.QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._place_empty_label()
 
     # -- chart synchronisation -------------------------------------------------------
     def current_bar(self) -> int:
