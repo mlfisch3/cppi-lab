@@ -38,10 +38,13 @@ Options:
 - **Documentation** (toolbar button or `F1`): two cross-linked volumes, strategy theory and technical implementation, side by side with a live counterpart preview.
 - **`?` badges:** hover for 150 ms to open a formatted explanation with rendered equations and links into both documentation volumes; the card can be pinned and moved.
 
-Both secondary windows open floating.
-Drag their title bar over the main window to dock them left, right or bottom, or use the small menu next to each toolbar button, which does the same without a drag.
+Both secondary windows open floating, above the main window.
+Drag their title bar to move them and their edges or corners to resize them.
+Drag the title bar over the main window and a docking compass appears: drop on its left, right or bottom indicator to dock the window there.
+The small menu next to each toolbar button does the same without a drag.
+On Linux the drag needs the X11 platform; see [Platform support](#platform-support).
 
-With the PRD's default floor (60,000 USD) and reference (72,000 USD) the default window, January 2026, contains no orders: Bitcoin traded between about 75,700 and 97,900 USD that month, always above the reference, so the strategy correctly holds its whole allocation.
+With the PRD's default floor (60,000 USD) and reference (72,000 USD) the default window, the 30 days from 2026-01-01, contains no orders: Bitcoin traded between 81,118 and 97,924 USD in it, always above the reference, so the strategy correctly holds its whole allocation.
 The chart says so and offers two one-click ways to see the machinery work: rescale the window to start near the floor, or load one of the scenarios in the top bar (several are 2026 periods that test the default floor at real prices).
 
 Chart navigation: drag to pan, scroll to zoom, double-click to zoom out, click to select a bar, `Ctrl+0` to reset the view.
@@ -81,14 +84,26 @@ No account or key is needed.
 ## Tests, lint and type checks
 
 ```bash
-uv run pytest                     # 397 tests, about one minute
+uv run pytest                     # 456 tests, about one and a half minutes
 uv run ruff check .               # lint
 uv run ruff format --check .      # formatting
 uv run mypy                       # strict type check of the package, scripts and tests
 ```
 
-The suite runs without a display: Qt is forced onto its `offscreen` platform.
-It covers the signal math, the simulation kernel against an independent plain-Python reference (all 26 telemetry fields bit for bit), the floor invariant as a property over random markets, seeds and parameters, the routing law, the fill model, PRNG determinism, the Monte Carlo ensemble, the loader and importers, the table model, and the user interface including the QtWebEngine documentation viewer.
+The suite runs without a display: Qt is forced onto its `offscreen` platform, with the application's own theme applied so that layout tests measure what is on screen.
+It covers the signal math, the simulation kernel against an independent plain-Python reference (all 26 telemetry fields bit for bit), the floor invariant as a property over random markets, seeds and parameters, the routing law, the fill model, PRNG determinism, the Monte Carlo ensemble, the loader and importers, the table model, and the user interface including the chart's display lists, the layout at 1920x1080 and at laptop sizes, the floating windows and the QtWebEngine documentation viewer.
+
+Two scripts exercise the real application on a display and save screenshots.
+They are not part of `pytest` because they need an X11 display, `xdotool` and ImageMagick's `import`:
+
+```bash
+uv run python scripts/ui_tour.py OUT_DIR          # every main state of the application
+uv run python scripts/drag_dock_tour.py OUT_DIR   # real mouse drags: move, resize, dock
+```
+
+`drag_dock_tour.py` injects genuine pointer events through the X server.
+For the ledger and for the documentation window it moves the floating window by its title bar, resizes it by a corner and an edge, drops it on the left, right and bottom indicator of the docking compass, and checks every step (66 checks); its exit status is 0 only if all of them hold.
+Keep your hands off the mouse while it runs: the X pointer is shared with the real one.
 
 ## Benchmarks
 
@@ -97,31 +112,43 @@ uv run python benchmarks/bench_latency.py      # headless
 uv run python benchmarks/bench_fps.py          # needs a display and OpenGL
 ```
 
-Measured on the development machine (Intel i9-12900H, 16 logical CPUs, NVIDIA RTX 3080 Ti Laptop, Linux under WSL2 with WSLg) for a 43,200-bar window:
+Measured on the development machine (Intel i9-12900H, 16 logical CPUs, NVIDIA RTX 3080 Ti Laptop, Linux under WSL2 with WSLg) for a 43,200-bar window; the ranges cover the scenarios of the benchmark and several runs:
 
 | PRD budget | Requirement | Measured | Result |
 | :--- | :--- | :--- | :--- |
-| Single-trajectory kernel | ≤ 15 ms | 1.0 to 1.6 ms median, 3.7 ms worst | met |
-| 100-seed Monte Carlo ensemble | ≤ 120 ms | 12 to 24 ms kernel only; 51 to 71 ms median including the 4.32 million draws and the percentiles (105 ms worst) | met |
-| Parameter change to refreshed plots, cards and table | < 50 ms | 10 to 18 ms median, 23 ms worst | met |
-| Chart pan, zoom and crosshair | 60 FPS | 40 to 64 FPS at the median frame, 32 to 55 FPS at the 95th percentile | **not met** |
+| Single-trajectory kernel | ≤ 15 ms | 1.1 to 1.7 ms median; slowest single run 4.6 ms | met |
+| 100-seed Monte Carlo ensemble | ≤ 120 ms | 11 to 23 ms kernel only; 47 to 73 ms median including the 4.32 million draws and the percentiles; slowest single run 95 ms | met |
+| Parameter change to refreshed plots, cards and table | < 50 ms | 7 to 12 ms median; slowest single run 18 ms | met |
+| Chart pan, zoom and crosshair | 60 FPS (16.7 ms) at the 95th percentile | worst 95th-percentile frame 12.9 to 13.6 ms on Wayland and 14.0 to 15.5 ms on X11 | met |
 
-The frame-rate requirement is missed on this machine.
-A frame costs 4 to 16 ms to paint and 16 to 25 ms end to end at the median (18 to 31 ms at the 95th percentile), where 16.7 ms would be needed.
-The cost no longer depends on the length of the back-test (a 365-day window is as fast as a 30-day one), but the per-frame work of the axis, marker and layer items plus the WSLg presentation path leaves it above one refresh interval.
-See [`docs/DECISIONS.md`](docs/DECISIONS.md), decision 27, for what was measured and done.
+The frame-rate benchmark replays panning, zooming and a crosshair sweep on the canvas at the size it has in a 1920x1080 window, for a 30-day and a 365-day back-test, with vertical sync off.
+It judges each case by the 95th percentile of the time from requesting a change to the end of the event-loop pass that presented it.
+It also reports two figures for context, which are not part of its verdict: the *presentation floor*, an empty OpenGL widget that only clears itself, and the same interactions inside the complete 1920x1040 window.
+The floor is 5.3 to 7.6 ms at the median and 7.3 to 10.1 ms at the 95th percentile on this machine, because WSLg copies every frame back from the GPU; the chart itself adds 1.2 to 3.6 ms of painting.
+In the complete window the worst 95th-percentile frame was 14.3 to 14.6 ms on Wayland.
+On X11, where an empty window of that size alone needs 9.5 to 10.6 ms at the 95th percentile, it was 15.2 to 17.2 ms over five runs: four within the budget and one above it.
+The full window on X11 is therefore at the limit on this machine, not comfortably inside it.
+The figures may differ on a native Linux, Windows or macOS session; they were not measured there.
+See [`docs/DECISIONS.md`](docs/DECISIONS.md), decisions 25 to 27, for how the chart is drawn and what was measured.
 
 ## Platform support
 
 The application was built and verified on **Linux under WSL2 with WSLg** only.
-The code uses no platform-specific API and Windows 11 and macOS are named targets of the PRD, but **neither has been run or tested**, so treat them as unverified.
+Windows 11 and macOS are named targets of the PRD, but **neither has been run or tested**, so treat them as unverified.
+The only platform-specific code is for Linux: the choice of the X11 platform in `cppi_lab/main.py` and the window-manager query in `cppi_lab/ui/x11.py`, both of which do nothing elsewhere.
 
 Notes for Linux:
 
 - **Docking by drag and drop needs X11.**
   Qt Advanced Docking System relies on global cursor positions and window placement, which a Wayland session does not provide.
-  The app selects X11 automatically when it is usable, and for that Qt needs the system package `libxcb-cursor0` (`sudo apt install libxcb-cursor0`).
-  Without it the app runs on Wayland: everything works, floating windows can be moved and resized, and docking is available from the toolbar menus, but the windows cannot be dropped onto the main window with the mouse and are placed by the compositor.
+  The app selects the X11 platform (`xcb`) automatically when it is usable, and for that Qt needs the library `libxcb-cursor.so.0`.
+  With administrator rights: `sudo apt install libxcb-cursor0`.
+  Without: put a copy of the library in `~/.local/lib/` (for example `apt-get download libxcb-cursor0 && dpkg-deb -x libxcb-cursor0_*.deb x && cp x/usr/lib/x86_64-linux-gnu/libxcb-cursor.so.0 ~/.local/lib/`), or name it in the environment variable `CPPI_LAB_XCB_CURSOR`.
+  The library has to match the system's C library, so take the distribution's own package.
+  Without it the app runs on Wayland: floating windows are moved and resized with the compositor's own title bar and frame, and docking is available from the toolbar menus, but a window cannot be dropped onto the main window with the mouse, and the compositor decides where it appears.
+- **On X11 the floating windows have the application's own title bar and frame.**
+  Moving, resizing and dropping onto the docking compass are then handled inside the application and do not depend on the window manager.
+  Where the window manager does not know utility windows (WSLg's does not, and never shows one), a floating panel is an ordinary window that belongs to the main window instead of a `Qt.Tool` window.
 - **Under WSL the documentation is rendered in software.**
   WSLg's graphics stack lacks an extension QtWebEngine's GPU compositor needs, so the app passes `--disable-gpu` to QtWebEngine there.
   The charts still use OpenGL.
@@ -141,12 +168,18 @@ cppi_lab/
   engine/kernel_numba.py     CPPI state machine, rho router, fill model
   engine/monte_carlo.py      parallel 100-seed ensemble
   engine/controller.py       cached recalculation pipeline (no Qt)
-  ui/                        main window, sidebar, KPI ribbon, chart, ledger, popovers, docs viewer
+  ui/                        main window, sidebar, KPI ribbon, ledger, popovers, docs viewer
+  ui/chart_workspace.py      the three panes: data, ranges, interaction, display lists
+  ui/chart_geometry.py       level-of-detail pyramids, tessellation, tick arithmetic
+  ui/chart_gl.py             sprite atlas, frames, OpenGL and QPainter back ends
+  ui/x11.py                  what the X11 window manager supports
   docs/                      theory.html, tech.html and the bundled KaTeX
 tests/                       pytest suite and the plain-Python reference machine
 benchmarks/                  latency and frame-rate benchmarks
 scripts/build_dataset.py     regenerates the bundled dataset
 scripts/ui_tour.py           drives the real app through its states for screenshots
+scripts/drag_dock_tour.py    real mouse drags: move, resize and dock the floating windows
+scripts/x11_capture.py       screenshot helper of the two tours
 docs/spec/                   PRD and TSD
 docs/DECISIONS.md            resolutions of ambiguities and substitutions
 docs/REQUIREMENTS_TRACE.md   requirement-by-requirement traceability

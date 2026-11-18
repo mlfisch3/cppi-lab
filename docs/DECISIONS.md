@@ -135,6 +135,11 @@ TSD section 6 says "Top 8 real-time telemetry summary cards" without naming them
 **Resolution:** net equity, cushion, floor integrity, BTC held, liquidation trigger, maker/taker fills, missed maker orders, fees plus slippage.
 They are the quantities the PRD's personas are told to inspect (missed maker fills against fee bleed, zero floor breaches across seeds).
 
+The Floor Integrity card answers its own question and nothing else: `INTACT`, `GAP BREACH` or `VIOLATED`.
+An emergency exit at the trigger keeps the floor, so it does not change the verdict.
+The sub-line counts the liquidations and says whether the strategy holds BTC again or is in cash ("1 liquidation, holds BTC"), and the value turns amber.
+An earlier version showed `LIQUIDATED` as the value, which read as the current state even after the strategy had bought back in.
+
 ### 19. `Start Date & Time` range and coupling of `P_ref`
 
 The start is clamped to the first and last bar of the active dataset; a window that runs past the end is simply shorter.
@@ -143,7 +148,7 @@ The start is clamped to the first and last bar of the active dataset; a window t
 ### 20. The default window contains no orders
 
 With the section 5 defaults (floor 60,000, reference 72,000, start 2026-01-01, 30 days) and real data the strategy never trades.
-**Evidence:** BTCUSDT traded between 75,719.90 and 97,924.49 in January 2026, always above `P_ref`, where `d_t = 1` and the ceiling equals `n_max`.
+**Evidence:** BTCUSDT traded between 81,118.00 and 97,924.49 in those 30 days (75,719.90 was the low of the calendar month, on its last day, outside the window), always above `P_ref`, where `d_t = 1` and the ceiling equals `n_max`.
 **Resolution:** the defaults are kept exactly as specified (FR-2.1).
 The chart shows a banner explaining why nothing happens, with one-click buttons to rescale the window or load a crash scenario, and the top bar offers ten curated scenarios, five of them 2026 periods that exercise the default floor at real prices.
 
@@ -187,31 +192,50 @@ The Coinbase REST fetcher uses the public market endpoint (`/api/v3/brokerage/ma
 ### 25. Chart rendering path
 
 TSD section 1.1 asks for pyqtgraph with `useOpenGL=True` and `enableExperimental=True`.
-Both options are set.
-pyqtgraph's own OpenGL curve path draws `GL_LINE_STRIP` primitives and so depends on the driver's line-width range, and it has no dashes.
-**Evidence:** on this machine the driver reports `GL_ALIASED_LINE_WIDTH_RANGE = [1.0, 1.0]`, so the 1.5 to 2.5 px line weights and dashed styles of the TSD visual-encoding matrix cannot be drawn that way; drawing them with `QPainter` on the same viewport took over 300 ms per frame.
-**Resolution:** lines, steps, dashes and filled bands are drawn by `cppi_lab/ui/chart_gl.py`, which tessellates them into triangles in screen space and renders them with a small shader on the same OpenGL viewport.
-Line weight, dashing and anti-aliasing are then identical on every driver.
-Markers, axes and text remain pyqtgraph items.
-Without an OpenGL viewport the same geometry is drawn with `QPainter`.
+Both options are set, and pyqtgraph provides the three-pane layout, the linked view ranges and the mouse interaction (drag to pan, wheel to zoom).
+Nothing is painted by pyqtgraph items, though.
+**Evidence:** pyqtgraph's OpenGL curve path draws `GL_LINE_STRIP` primitives, and the driver on this machine reports `GL_ALIASED_LINE_WIDTH_RANGE = [1.0, 1.0]`, so the 1.5 to 2.5 px line weights and the dashes of the TSD visual-encoding matrix cannot be drawn that way.
+Its axis, text and scatter items go through `QPainter`, and every item that draws with OpenGL itself has to open its own native-painting block; together that was most of a frame (profiled; see decision 27).
+**Resolution:** the whole canvas is drawn in one pass by `cppi_lab/ui/chart_gl.py`.
+The workspace assembles two display lists: the *scene* (grid, layers, markers, liquidation flashes, axes, tick labels) and the *overlay* (crosshair, liquidation badges, read-outs).
+Lines, steps and bands are tessellated into triangles in screen space; a small shader anti-aliases the ribbon edges and cuts dashes in window space, so weight, dashing and smoothing are identical on every driver.
+Text and markers are rasterised once by Qt into a sprite atlas (pyqtgraph's own symbol shapes are used for the markers) and drawn as textured quads.
+Both lists are replayed inside a single native-painting block of the viewport.
+Without an OpenGL viewport (`--no-opengl`, the test-suite) the same display lists are drawn with `QPainter`.
 
 ### 26. Level of detail
 
 Each layer is reduced to at most two points per pixel for the range in view.
 Prices, the trigger, equity and holdings use a min/max reduction that preserves every extreme.
 The two signals and the envelope edges oscillate every minute, and their min/max envelope would paint the pane solid, so they are drawn as bucket means when several bars share a pixel and exactly when zoomed in.
+Every series carries a pyramid of block minima, maxima and sums at block sizes 4, 16, 64 and so on (`cppi_lab/ui/chart_geometry.py`).
+A frame therefore scans at most about eight samples per pixel at any zoom level and any back-test length, and the value axes are auto-ranged from the same pyramids in microseconds.
+Points on a straight line between their neighbours are dropped before tessellation, which reduces flat levels and long steps to their corners without changing a pixel.
 Marker sizes shrink when more than 250 are in view.
 
-### 27. Chart frame rate: the 60 FPS requirement is not met on this machine
+### 27. Chart frame rate: 60 FPS at the 95th percentile
 
-**Measured** (`benchmarks/bench_fps.py`, 1450x940 canvas, WSLg, NVIDIA RTX 3080 Ti through the D3D12 driver): a frame costs 4 to 16 ms to paint and 16 to 25 ms end to end at the median, 18 to 31 ms at the 95th percentile.
-That is 40 to 64 FPS at the median and 32 to 55 FPS at the 95th percentile, where 16.7 ms would be needed.
-Only the crosshair at moderate zoom reaches the target at the median; panning and zooming do not.
-**What was done:** vertical grid lines and liquidation lines moved to GPU layers, a constant-time tick rule replaced pyqtgraph's date ticks, tessellation moved to Numba, a coarse level made the cost independent of window length (a 365-day window is as fast as a 30-day one), and per-layer bounds are cached.
-Together these roughly halved the frame time.
-**What remains:** pyqtgraph's value axes and marker items, about two dozen separate layer draws, and the WSLg presentation path.
-Reaching 60 FPS would need the axes and markers drawn on the GPU as well and the layers merged into one buffer.
-The figure may differ on a native Linux, Windows or macOS session; it was not measured there.
+**Requirement:** PRD section 6.1, "OpenGL chart pan/zoom and crosshair inspection must maintain 60 FPS", read as a 95th-percentile frame time of at most 16.7 ms.
+**Measured** (`benchmarks/bench_fps.py`, 1450x940 canvas, WSLg, NVIDIA RTX 3080 Ti through the D3D12 driver, vertical sync off): the worst 95th-percentile frame over all pan, zoom and crosshair cases of the 30-day and the 365-day back-test was 12.9 to 13.6 ms on Wayland and 14.0 to 15.5 ms on X11 across the runs made with the final renderer.
+Every run met the budget.
+The first version measured 18 to 31 ms.
+**The floor.**
+An empty OpenGL widget of the same size that only clears itself takes 5.3 to 7.6 ms at the median and 7.3 to 10.1 ms at the 95th percentile on this machine, because WSLg has no zero-copy path and reads every frame back from the GPU.
+The benchmark reports this floor next to its results.
+Whatever the application draws, a frame cannot be faster than that here; the chart adds 2.2 to 3.6 ms of painting to a pan or zoom frame and 1.2 to 1.7 ms to a crosshair frame.
+A profile of a pan with the final renderer shows about 6 ms of a 9.9 ms frame inside Qt's presentation, 2.1 ms building the display lists, 0.8 ms in pyqtgraph's range handling, 0.7 ms in the graphics view and 0.4 ms issuing the OpenGL calls.
+**What was done.**
+A profile of a pan in the first version (19.4 ms per frame at the median, 16.7 ms of it inside the paint event) attributed about 6 ms to the 24 layer items, each of which opened its own native-painting block (2.9 ms of that was decimation and tessellation), 4 ms to pyqtgraph's axis items (tick generation and text through `QPainter`) and 3 ms to the signal chain of a range change, including auto-ranging.
+Three empty plots alone took 6.5 to 7.5 ms per repaint.
+The single-pass renderer of decision 25 removed the per-item overhead, the pyramids of decision 26 bounded decimation and auto-ranging, and the plots' own axis items no longer track the view.
+Crosshair and read-out updates are decoupled from the scene: moving the crosshair rebuilds only the overlay list (a few hundred bytes) and replays buffers that are already on the GPU, with no decimation, tessellation or widget layout.
+**In the full window.**
+The benchmark also reports the same interactions inside the complete 1920x1040 application window, as context and not as part of its verdict, which is taken on the canvas as in the first version.
+There the worst 95th-percentile frame was 14.3, 14.3 and 14.6 ms on Wayland (three runs) and 15.2, 15.9, 16.1, 16.4 and 17.2 ms on X11 (five runs): four within the budget and one above it.
+The larger window raises the floor: an empty OpenGL widget of that size needs 8.8 to 8.9 ms at the 95th percentile on Wayland and 9.5 to 10.6 ms on X11, where every frame passes through XWayland as well.
+The full window on X11 is therefore at the limit on this machine rather than inside it, and the remaining 4 ms of application work per frame is spread thinly, as the profile above shows.
+X11 is nevertheless the platform the application prefers on Linux, because drag-and-drop docking does not work on Wayland (decision 31).
+The figures may differ on a native Linux, Windows or macOS session; they were not measured there.
 
 ### 28. Popovers are cards inside the main window
 
@@ -228,16 +252,37 @@ Assets are served relative to each page so every request is same-origin.
 
 ### 30. Floating window flags
 
-The TSD's flag set (`Tool | WindowStaysOnTopHint | WindowMinimizeButtonHint | WindowMaximizeButtonHint`) is OR-ed into the flags Qt Advanced Docking System already set, rather than replacing them, so the docking system's own frame handling keeps working.
+The TSD's flag set is `Tool | WindowStaysOnTopHint | WindowMinimizeButtonHint | WindowMaximizeButtonHint`.
+**Resolution:** the docking system's own hints are kept and only the window type and these hints are set.
+`Qt.Tool` becomes a utility window on X11.
+**Evidence:** WSLg's window manager advertises `_NET_WM_MOVERESIZE`, `_NET_WM_STATE` (fullscreen and maximised only), `_NET_ACTIVE_WINDOW` and `_NET_FRAME_EXTENTS` in `_NET_SUPPORTED`, and no window type at all.
+It never maps a utility window: a floating ledger flagged `Qt.Tool` sat about 32,700 pixels off screen in both axes and did not exist on the desktop.
+Ordinary windows, dialogs and frameless windows are shown, moved and resized as requested.
+Where the window manager answers and does not list `_NET_WM_WINDOW_TYPE_UTILITY`, the floating panel is therefore an ordinary window (`cppi_lab/ui/x11.py` reads the list through Xlib).
+It still belongs to the main window (it is transient for it), which keeps it above; the on-top hint is set as well.
+Everywhere else the TSD flags are used unchanged.
 
-### 31. Qt platform on Linux
+### 31. Qt platform on Linux, and floating windows on X11
 
 Qt Advanced Docking System needs global cursor positions and window placement for drag-and-drop docking, which a Wayland session does not provide.
 **Resolution:** on Linux the app selects the X11 platform plugin when a display is present and `libxcb-cursor.so.0` (required by Qt's X11 plugin since 6.5) can be loaded, and otherwise leaves Qt's choice in place.
+The library is looked for in the system, then in the file named by `CPPI_LAB_XCB_CURSOR`, then in `~/.local/lib` and the nix profile; a copy loaded this way satisfies the plugin's dependency without `LD_LIBRARY_PATH`.
 Docking is also available from a menu next to each toolbar button, which works on every platform.
-**On this machine** `libxcb-cursor0` is not installed, so the app runs on Wayland.
-It was additionally started on X11 with a user-local copy of the library: the plugin loads, the window opens and the floating windows carry the `Tool` and `WindowStaysOnTopHint` flags.
-Under WSLg neither platform honours an application's request to position a top-level window (the main window itself lands at a different place on every start), so the floating windows open where the compositor puts them rather than over the main window as the code requests.
+**On this machine** the system package is not installed and no system package was installed for this work.
+The distribution's own `libxcb-cursor0` package was unpacked into a user directory (`apt-get download`, `dpkg-deb -x`); the nix build of the library needs a newer C library than the system has and does not load.
+
+On X11 the floating windows carry the docking system's own title bar (`FloatingContainerForceQWidgetTitleBar`), so a drag onto the compass is handled inside the application instead of depending on how a window manager reports a move it performs itself.
+Three things had to be added for that to work properly; all were found by driving the real application with injected mouse events (decision 34).
+
+- **Title-bar drag.**
+  The docking system moves the window to `cursor - press position` and corrects only for a frame on the sides.
+  WSLg reports a frame of 59 px above an undecorated window (an invisible shadow margin), and the window jumped down by that amount when a drag started.
+  The press is reported that much lower (`TitleBarPressFix`), which cancels the error exactly and changes nothing where no frame is reported.
+- **Resizing.**
+  A frameless window has no border to pull, so eight grips along the edges and corners resize it (`ResizeGrips`); they also draw the window's one-pixel outline.
+- **Native child windows.**
+  The docking system made sibling widgets native X windows the first time a panel floated, and a late geometry event from the server then put child widgets back where they had been.
+  `AA_DontCreateNativeWidgetSiblings` prevents that.
 
 ### 32. QtWebEngine under WSL
 
@@ -245,18 +290,64 @@ Under WSLg neither platform honours an application's request to position a top-l
 **Resolution:** under WSL the app sets `QTWEBENGINE_CHROMIUM_FLAGS=--disable-gpu` unless the variable is already set.
 The pages are static text and mathematics, and the charts are unaffected.
 
-### 33. Responsive behaviour below 1080p
+### 33. Responsive behaviour: nothing is clipped
 
-FR-4.1 is met at 1920x1080: every control, card and pane is visible without scrolling.
-On shorter screens only the parameter column scrolls and its reset button stays pinned; KPI cards switch to short captions; a pane's legend gives way to the crosshair read-out; and a documentation panel docked into a narrow side panel stacks its two viewers.
+FR-4.1 is met at 1920x1080: every control, card and pane is visible without scrolling, and no caption, value or sub-line is shortened at all.
+Below that, whatever no longer fits is replaced by a shorter wording or an ellipsis with a tool tip; nothing is cut off in the middle or covered by another control.
+
+- **KPI ribbon** (64 px at every size).
+  Sub-lines are at most 26 characters, which fits a card of a 1920-pixel window.
+  Cards narrower than 168 px use short captions and sub-lines of at most 16 characters; when eight cards no longer fit in a row (below 104 px each, for example with a panel docked beside the workbench) they form two rows of four, one line each.
+  The tool tip of a card always has its full caption, value and sub-line.
+- **Parameter column.**
+  Only this column scrolls on a short screen, and its reset button stays pinned.
+  A row is exactly as wide as the scroll viewport, and the gutter of the scrollbar is reserved whether or not there is anything to scroll, so the scrollbar never covers or shifts the per-row reset buttons.
+- **Top bar.**
+  The status read-out has four wordings, from every timing down to the bar count.
+  It gets the longest one that fits once the scenario selector has given up what it can spare; the dataset name keeps its full width unless the window is too narrow even for the bar count.
+  A selector that is narrower than its text ends it with an ellipsis.
+- **Chart.**
+  A pane's legend gives way to the crosshair read-out when both do not fit; value-axis labels are thinned on a short pane instead of overlapping.
+- **Liquidation badges.**
+  Liquidations whose flash lines would fall inside one label share it ("LIQUIDATION ×4").
+  A label that would leave the pane is placed to the left of its line, and the opaque labels are drawn after every flash and crosshair line, so no line strikes through one.
+- **Secondary windows.**
+  A documentation panel docked into a narrow side panel stacks its two viewers and shows the short name of the volume; the ledger's toolbar shortens its export caption; a wide documentation table scrolls inside its own box.
+
+`tests/test_ui_layout.py` pins these properties at 1920x1040, 1536x824, 1366x728, 1280x680 and at the minimum window size.
+
+### 34. The chart went black after a panel was docked and floated again
+
+**Evidence:** on Wayland and on X11, in the first version as well, docking a floating panel and then floating it again left the OpenGL chart black until the window was next resized; repaints did not help.
+When the docking system re-parents the workbench, Qt tells every OpenGL widget below it that its window is about to change, and the widget drops the texture through which its framebuffer is composited into the window.
+A stand-alone `QOpenGLWidget` recreates it in its own paint event; the viewport of a graphics view never runs that paint event, and a scroll area asks its viewport to rebuild the framebuffer only when its size really changes.
+**Resolution:** the canvas notices the two window-change events and has the viewport rebuild its surface by changing its height by one pixel and back, before anything is painted (`ChartCanvas.recreate_surface`).
 
 ## E. Verification method
 
-### 34. How the real application was exercised
+### 35. How the real application was exercised
 
 `scripts/ui_tour.py` builds the real main window on the display with OpenGL and QtWebEngine enabled and performs the user actions: parameter changes, scenario loading, the Monte Carlo fan, zoom and crosshair, hovering `?` badges, pinning a popover, opening, floating and docking the ledger and the documentation, following a popover link, searching, and resizing to laptop sizes.
-Under WSLg, Qt cannot read back an OpenGL viewport, so the screenshots were taken from the Windows side with `PrintWindow`, one application window per image.
-An early version of that capture took the bounding box of all application windows and so included other parts of the desktop; those images were deleted immediately and the method was changed to per-window capture.
+`QWidget.grab()` cannot see an OpenGL viewport, and the root window of WSLg's rootless X server cannot be captured as a whole.
+On the X11 platform each screenshot is therefore assembled from the application's own top-level windows, read back from the X server one by one (ImageMagick `import -window`) and painted at their screen positions; translucent overlays such as the docking compass are rendered by Qt, which keeps their transparency.
+The images show the client areas as the X server holds them; the window manager's decoration of the main window and the shadow around the floating windows are not part of them.
+Nothing but the application's own windows is ever read.
 
-Two things were **not** verified with a physical mouse, because no input-injection tool is available on this machine: dragging a floating window onto the docking compass, and moving a floating window by its title bar.
-Docking was verified through the toolbar menu, which calls the same `CDockManager.addDockWidget` the drop performs.
+### 36. Drag-and-drop docking, title-bar move and edge resize with a real mouse
+
+`scripts/drag_dock_tour.py` drives the real application from outside with `xdotool`, which injects genuine pointer events through the X server (XTEST).
+For the ledger and for the documentation window it moves the floating window by its title bar, resizes it by its bottom-right corner and by its right edge, drags it onto the left, right and bottom indicator of the docking compass, checks before the release that the compass reports that drop area, releases, and checks that the panel sits on that side and that the chart is still drawn; then it floats the panel again.
+It makes 66 checks and saves a screenshot in the middle of each docking drag and after each drop.
+`xdotool` was obtained through nix and is not installed in the system.
+The tour found the defects described in decisions 30, 31 and 34 and a clipped toolbar in the docked ledger.
+
+One property of the environment had to be handled.
+The X pointer is shared with the real mouse: when a window moves or appears under the resting pointer, the X server's pointer jumps there until the next injected motion, and the docking system, which asks the server for the pointer position while it moves a window, then puts the dragged window in the wrong place.
+The tour checks the server's pointer at every step of a drag, repeats a gesture that was disturbed, and keeps its windows away from where the real pointer rests.
+The injected events cannot reach the window manager's own decoration, so moving a window by a native title bar (the main window's, or a floating window's on Wayland) was not exercised this way.
+
+### 37. The test session applies the application theme
+
+Fonts, paddings and borders come from the theme.
+Without it every widget has a different size than on screen, and a layout test proves nothing; the first version's suite ran unstyled.
+`tests/conftest.py` now styles the test application exactly as `cppi-lab` styles the real one.

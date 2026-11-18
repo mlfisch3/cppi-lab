@@ -10,6 +10,7 @@ Verification methods:
 - **test**: an automated pytest test (run headless with `uv run pytest`).
 - **bench**: a measurement by `benchmarks/bench_latency.py` or `benchmarks/bench_fps.py`.
 - **display**: exercised in the real application on the display by `scripts/ui_tour.py`, with the resulting screenshot inspected.
+- **mouse**: exercised in the real application with injected pointer events by `scripts/drag_dock_tour.py` (X11, `xdotool`), which checks every step.
 - **manual**: a one-off check described in the row.
 
 Status values: **met**, **met with note** (met, with a clarification or resolved ambiguity), **partial**, **not met**.
@@ -18,13 +19,13 @@ Status values: **met**, **met with note** (met, with a clarification or resolved
 
 | Gap | Where |
 | :--- | :--- |
-| The 60 FPS chart requirement is not met on the development machine: 40 to 64 FPS at the median frame, 32 to 55 FPS at the 95th percentile. | PRD 6.1, D-27 |
 | The bundled data is Binance BTCUSDT, used as the BTC-USD proxy, not a USD-quoted pair. | FR-1.1, D-21 |
-| Dragging a floating window onto the docking compass and moving it by its title bar were not exercised with a physical mouse; docking was verified through the toolbar menu and in tests. | FR-5.1, FR-6.3, D-34 |
-| Under a Wayland session (the default on this machine, where `libxcb-cursor0` is not installed) drag-and-drop docking is not available and floating windows are positioned by the compositor. | FR-5.1, D-31 |
+| Moving a window by a title bar the window manager draws (the main window's, or a floating window's on Wayland) cannot be reached by injected pointer events and was not exercised; on X11 the floating windows have the application's own title bar, and moving, resizing and docking them by mouse were. | FR-5.1, FR-6.3, D-36 |
+| Under a Wayland session drag-and-drop docking is not available and floating windows are positioned by the compositor; the toolbar menus dock instead. The X11 platform, on which it works, needs `libxcb-cursor.so.0`, which is not installed in this machine's system (a user-level copy is enough). | FR-5.1, D-31 |
 | Windows 11 and macOS, named as target platforms, were not run or tested. | PRD header |
 | The kernels are compiled without `fastmath`, contrary to the decorator shown in the TSD. | TSD 1.1, D-6 |
 | With the specified defaults the default window contains no orders; this is correct behaviour and is explained in the UI. | FR-2.1, D-20 |
+| The frame-rate benchmark is met on both display back ends. Inside the complete 1920x1040 window, which the benchmark reports as context, the worst 95th-percentile frame on X11 is at the limit on this machine: 15.2 to 17.2 ms over five runs, one of them above 16.7 ms; an empty window of that size alone needs 9.5 to 10.6 ms there. On Wayland it is 14.3 to 14.6 ms. | PRD 6.1, D-27 |
 
 ## PRD section 3: strategy and invariants
 
@@ -48,20 +49,20 @@ Status values: **met**, **met with note** (met, with a clarification or resolved
 | FR-1.3 `Normalize Start Price to Reference Anchor` | `MarketWindow.rescaled`; controller; sidebar row with anchor price; amber chip in the top bar | test: `test_rescaling_preserves_returns_and_volumes`, `test_normalisation_anchors_the_first_open`, `test_anchor_price_edit`; display: screenshot 03 | met with note: default off (D-17) |
 | FR-2.1 Default initialisation | `config/defaults.py` | test: `test_defaults.py` (every row of section 5), `test_launches_with_prd_defaults_in_every_control` | met |
 | FR-2.2 Slider and spin box in sync, per-row reset, global reset | `ui/control_sidebar.py` `ParamRow`, `ControlSidebar` | test: `test_every_numeric_row_has_slider_spin_reset_and_badge`, `test_spin_edit_recalculates_and_moves_the_slider`, `test_slider_edit_recalculates_and_moves_the_spin_box`, `test_reset_one_row`, `test_reset_all`, `test_start_time_edit_and_reset`, `test_values_are_clamped_to_the_prd_range`, `test_p_ref_follows_p_liq` | met with note: the two toggles (Monte Carlo fan, normalisation) are switches, not sliders |
-| FR-2.3 Re-run 43,200 bars and refresh plots and tables in under 50 ms | `engine/controller.py` (staged caches); `MainWindow.recalculate` | bench: 10 to 18 ms median, 23 ms worst; test: `test_recalculation_refreshes_kpis_chart_and_ledger`, `test_burst_of_edits_is_coalesced_into_one_run`, `test_stage_caches_are_reused_only_when_valid` | met with note: the figure covers the back-test and the update of every view's data; painting the next frame costs a further 4 to 16 ms |
+| FR-2.3 Re-run 43,200 bars and refresh plots and tables in under 50 ms | `engine/controller.py` (staged caches); `MainWindow.recalculate` | bench: 7 to 12 ms median, slowest single run 18 ms; test: `test_recalculation_refreshes_kpis_chart_and_ledger`, `test_burst_of_edits_is_coalesced_into_one_run`, `test_stage_caches_are_reused_only_when_valid` | met with note: the figure covers the back-test and the update of every view's data; painting the next frame costs a further 2 to 4 ms |
 | FR-3.1 Maker fee, taker fee, slippage buffer | parameters `f_maker`, `f_taker`, `delta_slip` | test: `test_defaults.py`, `test_uniform_draw_decides_fill_or_miss`, `test_row_identities` | met |
 | FR-3.2 Stochastic maker fill model, seeded uniform draw, fill at limit with maker fee, missed orders logged | `fill_probability`, step 3 of `simulate_core`, `uniform_draws` | test: `test_fill_model.py`, `test_prng.py`, `test_kernel_reference.py` | met |
 | FR-3.3 Monte Carlo fan, 100 seeds in parallel, 5th to 95th percentile band behind the active trajectory | `engine/monte_carlo.py`; `MainWindow._request_ensemble`; `ChartWorkspace.set_ensemble` | test: `test_monte_carlo.py`, `test_monte_carlo_fan_toggle`, `test_monte_carlo_fan_runs_on_a_worker_thread`, `test_monte_carlo_fan_layer`; display: screenshot 03 | met |
 | FR-3.4 Risk aversion `rho`: 0 = maker only plus the emergency exit, 1 = taker only, interior = split or escalate | `route_order_by_rho`, `taker_fraction`, `execution_urgency` | test: `test_routing.py` | met with note: maker dominance override when `f_maker >= f_taker + delta_slip` (D-9) |
-| FR-4.1 Everything on one screen without vertical scrolling or tabs | `ui/main_window.py` layout; sidebar rows of 25 px | test: `test_everything_fits_one_1080p_screen_without_scrolling`, `test_small_screens_scroll_only_the_sidebar`; display: screenshots 01 to 03 at 1920x1040, 21 at 1536x864 and 1366x768 | met at 1920x1080; below that only the parameter column scrolls (D-33) |
+| FR-4.1 Everything on one screen without vertical scrolling or tabs | `ui/main_window.py` layout; sidebar rows of 25 px; `ui/kpi_ribbon.py` | test: `test_everything_fits_one_1080p_screen_without_scrolling`, `test_small_screens_scroll_only_the_sidebar`, `test_ui_layout.py` (`test_nothing_is_shortened_at_1920x1080` for five scenarios, laptop sizes, minimum size); display: screenshots 01 to 03 at 1920x1040, 21 at 1536x864 and 1366x768 | met at 1920x1080 with nothing shortened; below that only the parameter column scrolls and texts use deliberate short wordings (D-33) |
 | FR-4.2 Pane 1: close with low-high shading, `P_liq`, `P_floor`, `V_t`, six marker kinds | `ui/chart_workspace.py`, `ui/chart_gl.py` | test: `test_layers_carry_the_telemetry`, `test_markers_are_lossless`, `test_visual_encoding_matches_the_tsd_matrix`; display: screenshots 02 to 04 | met |
 | FR-4.2 Pane 2: holdings, `n_max`, ceiling, rebuy floor, shaded deadband | same | same | met |
 | FR-4.2 Pane 3: both signals and a stem per maker attempt showing `P_fill` against `U_t` | same | same | met |
 | FR-4.2 Vertically synchronised panes | linked x axes; shared crosshair | test: `test_three_linked_panes_with_headers`, `test_zoom_is_synchronised_across_panes`, `test_crosshair_and_readout` | met |
-| FR-4.3 Automated visual hierarchy and event callouts | z-order, line weights, level of detail, marker density scaling, liquidation flash lines and badges | test: `test_visual_encoding_matches_the_tsd_matrix`; display: screenshots 02 to 04, 21 | met |
-| FR-5.1 (1) Ledger window movable and resizable | `CDockWidget` in a `CFloatingDockContainer` | test: `test_ledger_opens_floating_on_top_and_docks` (resize); display: screenshot 08 | met with note: moving by mouse not exercised physically (D-34) |
-| FR-5.1 (2) Stays on top of the main window | `MainWindow._apply_floating_flags` (`Tool`, `WindowStaysOnTopHint`) | test: `test_ledger_opens_floating_on_top_and_docks` | met |
-| FR-5.1 (3) Dockable left, right, bottom by drag and drop | Qt Advanced Docking System; `MainWindow.dock_to`; toolbar menus | test: `test_ledger_opens_floating_on_top_and_docks`, `test_docking_menu_lists_every_position`, `test_docked_panel_can_collapse_into_an_auto_hide_side_bar`; display: screenshots 10 to 12, 17 | partial: docking verified through the menu and in tests; the mouse drag onto the compass was not exercised, and needs X11 on Linux (D-31, D-34) |
+| FR-4.3 Automated visual hierarchy and event callouts | draw order, line weights, level of detail, marker density scaling, liquidation flash lines and clustered badges | test: `test_visual_encoding_matches_the_tsd_matrix`, `test_the_frame_draws_every_layer_marker_and_flash`, `test_liquidation_badges_cluster_and_never_overlap`; display: screenshots 02 to 04, 21 | met |
+| FR-5.1 (1) Ledger window movable and resizable | `CDockWidget` in a `CFloatingDockContainer`; on X11 its own title bar, `TitleBarPressFix` and `ResizeGrips` (`ui/widgets.py`) | mouse: title-bar drag follows the cursor to the pixel, corner and edge drags resize; test: `test_ui_floating.py` (grips from every edge and corner, minimum size, title-bar correction), `test_ledger_opens_floating_on_top_and_docks`; display: screenshot 08 | met; with a window-manager title bar (Wayland) the move was not exercised by mouse (D-36) |
+| FR-5.1 (2) Stays on top of the main window | `MainWindow._apply_floating_flags`, `floating_window_flags` (`WindowStaysOnTopHint`; `Tool`, or an owned ordinary window where utility windows are not shown) | test: `test_ledger_opens_floating_on_top_and_docks`, `test_tool_windows_are_used_only_where_they_are_shown`, `test_floating_window_on_x11_has_its_own_title_bar_and_resize_grips`; mouse: the window is on screen over the main window | met with note: window type chosen from the window manager's capabilities (D-30) |
+| FR-5.1 (3) Dockable left, right, bottom by drag and drop | Qt Advanced Docking System; `MainWindow.dock_to`; toolbar menus | mouse: the floating window is dragged onto the left, right and bottom compass indicator, the compass reports the drop area, and the panel is docked on that side with the chart still drawn; test: `test_ledger_opens_floating_on_top_and_docks`, `test_docking_menu_lists_every_position`, `test_docked_panel_can_collapse_into_an_auto_hide_side_bar`; display: screenshots 10 to 12, 17 | met on X11; on Wayland docking is by the toolbar menu (D-31) |
 | FR-5.1 (4) Vertical and horizontal scrolling in the table | `QTableView` | test: `test_table_scrolls_both_ways_and_is_read_only` | met |
 | FR-5.2 All quantities at every timestep | `TelemetryTableModel`, 26 columns | test: `test_shape_and_headers_cover_every_telemetry_field`, `test_model_is_a_zero_copy_view`, `test_cell_formatting` | met |
 | FR-5.2 Filters `All Timesteps`, `Executed Trades`, `Missed Maker Orders`, `Floor Liquidations` | `TelemetryTableModel.set_filter` | test: `test_filter_names_match_the_prd`, `test_filters_select_exactly_the_flagged_bars`, `test_missed_filter_includes_misses_hidden_behind_a_taker_fill`, `test_filter_combo_offers_the_four_prd_filters`; display: screenshots 08 to 10 | met |
@@ -74,7 +75,7 @@ Status values: **met**, **met with note** (met, with a clarification or resolved
 | FR-6.2 Theoretical Strategy Documentation with complete derivations | `cppi_lab/docs/theory.html` (8 sections, 24 display equations) | test: `test_sections_are_substantial_prose_with_math`, `test_volumes_cover_the_topics_required_by_the_prd`, `test_theory_volume_renders_with_math_and_the_full_spine`; display: screenshots 13, 17 | met |
 | FR-6.2 Technical Implementation Documentation | `cppi_lab/docs/tech.html` (8 sections) | test: same, plus `test_technical_volume_renders_without_errors`; display: screenshots 14, 20 | met |
 | FR-6.3 Every section linked to its exact counterpart, both ways | `a.xref` links; `doc_registry.json` | test: `test_every_section_links_to_its_exact_counterpart`, `test_every_link_resolves`, `test_clicking_a_counterpart_link_navigates_the_primary_view` | met |
-| FR-6.3 Viewer movable, resizable, on top when floating, dockable | `docs_dock` `CDockWidget` | test: `test_popover_link_opens_the_workbench_at_the_exact_section`, `test_docking_menu_lists_every_position`; display: screenshots 13 to 18, 20 | met with the same note as FR-5.1 |
+| FR-6.3 Viewer movable, resizable, on top when floating, dockable | `docs_dock` `CDockWidget` | mouse: the same move, resize and three drops as for the ledger; test: `test_popover_link_opens_the_workbench_at_the_exact_section`, `test_docking_menu_lists_every_position`; display: screenshots 13 to 18, 20 | met with the same notes as FR-5.1 |
 | FR-6.3 Live counterpart preview while reading or hovering links | `DocWorkbench`, `DocSyncBridge`, `docs/assets/doc_sync.js` | test: `test_scroll_spy_moves_the_counterpart_preview`, `test_hovering_a_link_peeks_and_leaving_returns`, `test_collapsed_preview_falls_back_to_a_snippet_card`; display: screenshots 13 to 15 | met |
 
 ## PRD section 5: parameters
@@ -94,9 +95,9 @@ Every row is defined once in `cppi_lab/config/defaults.py` (`PARAM_SPECS`) and v
 
 | Requirement | Implementation | Verification | Status |
 | :--- | :--- | :--- | :--- |
-| 6.1 Single trajectory, 43,200 bars, <= 15 ms on one core | `simulate_core` | bench: 1.0 to 1.6 ms median, 3.7 ms worst | met |
-| 6.1 100-seed ensemble <= 120 ms with `@njit(parallel=True)` | `ensemble_core`, `percentile_band` | bench: 12 to 24 ms kernel only; 51 to 71 ms median including the draws and percentiles; 105 ms worst | met |
-| 6.1 Pan, zoom and crosshair at 60 FPS | `ui/chart_gl.py`, `ui/chart_workspace.py` | bench: frame 16 to 25 ms median, 18 to 31 ms at the 95th percentile; paint 4 to 16 ms median | **not met** on the development machine (D-27) |
+| 6.1 Single trajectory, 43,200 bars, <= 15 ms on one core | `simulate_core` | bench: 1.1 to 1.7 ms median, slowest single run 4.6 ms | met |
+| 6.1 100-seed ensemble <= 120 ms with `@njit(parallel=True)` | `ensemble_core`, `percentile_band` | bench: 11 to 23 ms kernel only; 47 to 73 ms median including the draws and percentiles; slowest single run 95 ms | met |
+| 6.1 Pan, zoom and crosshair at 60 FPS | `ui/chart_gl.py`, `ui/chart_geometry.py`, `ui/chart_workspace.py` | bench: worst 95th-percentile frame 12.9 to 13.6 ms (Wayland) and 14.0 to 15.5 ms (X11) over pan, zoom and crosshair for a 30-day and a 365-day back-test; paint 1.2 to 3.6 ms; empty-scene floor 7.3 to 10.1 ms at the 95th percentile | met with note: inside the complete window on X11 the figure is at the limit, 15.2 to 17.2 ms over five runs (D-27) |
 | 6.2 IEEE-754 `float64` accounting with conservation assertions `V_t >= F - 1e-6` | kernel compiled without `fastmath`; breach counter in the loop; Floor Integrity card | test: `test_kernel_reference.py` (bit-identical to the reference), `test_floor_invariant.py`, `test_accounting.py` | met |
 | 6.3 Dark theme `#0B0F19`, `#111827`, `#1E293B` | `ui/theme.py` | test: `test_visual_encoding_matches_the_tsd_matrix`; display: all screenshots | met |
 
@@ -105,7 +106,7 @@ Every row is defined once in `cppi_lab/config/defaults.py` (`PARAM_SPECS`) and v
 | Item | Implementation | Verification | Status |
 | :--- | :--- | :--- | :--- |
 | 1.1 Python 3.11+, PySide6 (Qt 6.7+), PySide6-QtAds | `pyproject.toml`, `uv.lock` (Python 3.12, PySide6 6.12, QtAds 5.1) | `uv sync`; the test-suite | met |
-| 1.1 pyqtgraph with `useOpenGL=True`, `enableExperimental=True` | `main.py` sets both; layers drawn by `ui/chart_gl.py` on the same OpenGL viewport | display: all screenshots; bench | met with note: custom triangle renderer instead of pyqtgraph's line path (D-25) |
+| 1.1 pyqtgraph with `useOpenGL=True`, `enableExperimental=True` | `main.py` sets both; pyqtgraph provides the layout, ranges and interaction; the canvas is drawn in one pass by `ui/chart_gl.py` on the same OpenGL viewport | display: all screenshots; bench | met with note: single-pass renderer instead of pyqtgraph's items (D-25) |
 | 1.1 Numba `@njit(nogil=True, fastmath=True, parallel=True)`, counter-seeded PCG64 | `engine/kernel_numba.py`, `engine/monte_carlo.py` | test: `test_prng.py`, `test_monte_carlo.py` | met with note: no `fastmath` (D-6); seeds `s_rng + m` (D-16) |
 | 1.1 Polars + PyArrow, Zstd Parquet, zero-copy views into a virtualised `QAbstractTableModel` | `data/loader.py` (PyArrow reader for imported Parquet); `TelemetryTableModel` | test: `test_loader.py`, `test_model_is_a_zero_copy_view`, `test_window_slicing_is_zero_copy_and_half_open` | met |
 | 1.1 `QWebEngineView` + `cppidoc://` scheme handler + local KaTeX + `QWebChannel` | `ui/doc_scheme.py`, `ui/doc_workbench.py`, `docs/assets/` | test: `test_scheme_handler_serves_pages_assets_and_popovers`, `test_katex_is_bundled_locally_with_its_fonts`, `test_ui_docs_web.py` | met |
@@ -117,19 +118,23 @@ Every row is defined once in `cppi_lab/config/defaults.py` (`PARAM_SPECS`) and v
 | 2.5 Fill model and uniform resolution | `fill_probability`, step 3 | test: `test_fill_model.py` | met with note: a fill needs `P_fill > 0` (D-14) |
 | 3.1 Intra-bar order: floor, trigger, maker resolution, control law, telemetry | `simulate_core` | test: `test_kernel_reference.py` (reference written step by step from this section) | met with note: step 3b added (D-9) |
 | 3.2 Telemetry schema | `TELEMETRY_DTYPE` | test: `test_telemetry_dtype_is_the_tsd_schema`, `test_row_identities` | met with note: 26 fields (D-1); event priority and flags (D-12); sentinels (D-13) |
-| 4.1 KPI ribbon of 64 px with 8 cards; 3 panes at 55:25:20; shared date axis | `ui/kpi_ribbon.py`, `ChartWorkspace._apply_pane_heights`, `_UtcAxis` | test: `test_everything_fits_one_1080p_screen_without_scrolling`, `test_there_are_eight_cards_with_popovers` | met |
+| 4.1 KPI ribbon of 64 px with 8 cards; 3 panes at 55:25:20; shared date axis | `ui/kpi_ribbon.py`, `ChartWorkspace._apply_pane_heights`, `chart_geometry.time_ticks` | test: `test_everything_fits_one_1080p_screen_without_scrolling`, `test_there_are_eight_cards_with_popovers`, `test_ribbon_goes_from_one_row_to_two_rows_of_four`, `test_time_and_value_ticks` | met with note: on a narrow canvas the eight cards form two rows inside the same 64 px (D-33) |
 | 4.1 Visual-encoding matrix (colours, weights, dashes, symbols, sizes) | `ui/theme.py`, `ChartWorkspace._build_layers` | test: `test_visual_encoding_matches_the_tsd_matrix`; display | met with note: a missed draw is shown as an amber ring and a filled one as a purple dot, so the outcome of each coin flip is visible |
-| 4.2 Floating flags; docked modes left, right, bottom, auto-hide | `MainWindow._apply_floating_flags`, `dock_to`, auto-hide configuration | test: `test_ledger_opens_floating_on_top_and_docks`, `test_docked_panel_can_collapse_into_an_auto_hide_side_bar` | met with note: flags are added to the docking system's own (D-30) |
+| 4.2 Floating flags; docked modes left, right, bottom, auto-hide | `MainWindow._apply_floating_flags`, `floating_window_flags`, `dock_to`, auto-hide configuration | test: `test_ledger_opens_floating_on_top_and_docks`, `test_tool_windows_are_used_only_where_they_are_shown`, `test_docked_panel_can_collapse_into_an_auto_hide_side_bar`; mouse | met with note: `Tool` only where the window manager shows utility windows (D-30) |
 | 4.3 Popover flow: 150 ms debounce, 8 px anchor, 300 ms grace, fade, pin; example content for `rho` | `ui/popover_manager.py`, `doc_registry.json` | test: `test_ui_popover.py`, `test_rho_popover_matches_the_tsd_example` | met |
 | 5.1 `doc_registry.json`, shared spine, `data-concept-id` | `config/doc_registry.json`, both HTML volumes | test: `test_registry_spine_has_eight_sections_including_the_six_tsd_concepts`, `test_both_volumes_share_the_spine_in_order` | met with note: 6 tabulated ids plus 2 (D-2) |
 | 5.2 Primary 65 %, preview 35 %; toolbar Back, Forward, Switch, Search, Toggle | `DocWorkbench` | test: `test_splitter_gives_primary_65_and_preview_35`, `test_toolbar_has_the_five_specified_controls`, `test_switching_volume_keeps_the_concept`, `test_search_reports_matches` | met |
 | 5.2 Scroll-spy with `IntersectionObserver` and `notifySectionFocused`; left-border highlight; hover peek; snippet card when collapsed; click navigates | `docs/assets/doc_sync.js`, `DocSyncBridge` | test: `test_ui_docs_web.py` | met |
-| 6 Module layout | as listed, plus `engine/controller.py`, `ui/chart_gl.py`, `ui/doc_scheme.py`, `ui/theme.py`, `ui/widgets.py` | - | met with note: five helper modules were added |
+| 6 Module layout | as listed, plus `engine/controller.py`, `ui/chart_gl.py`, `ui/chart_geometry.py`, `ui/doc_scheme.py`, `ui/theme.py`, `ui/widgets.py`, `ui/x11.py` | - | met with note: seven helper modules were added |
 
 ## Engineering quality
 
 | Check | Command | Result |
 | :--- | :--- | :--- |
-| Tests | `uv run pytest` | 397 passed; the suite was run repeatedly with no intermittent failure |
+| Tests | `uv run pytest` | 456 passed; run three times in a row on the final commit with no intermittent failure |
 | Lint and format | `uv run ruff check . && uv run ruff format --check .` | clean |
-| Types | `uv run mypy` (strict) | clean, 46 source files |
+| Types | `uv run mypy` (strict) | clean, 52 source files |
+| Real application, every state | `uv run python scripts/ui_tour.py OUT` | 22 screenshots, inspected |
+| Real mouse: move, resize, dock | `uv run python scripts/drag_dock_tour.py OUT` | 66 checks passed, three runs in a row |
+| Latency budgets | `uv run python benchmarks/bench_latency.py` | all met |
+| Frame rate | `uv run python benchmarks/bench_fps.py` | met on Wayland and on X11 in every run; full-window context figure at the limit on X11 (D-27) |

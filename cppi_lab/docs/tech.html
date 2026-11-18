@@ -520,27 +520,39 @@ WSL2) for a 43,200-bar window; <code>benchmarks/bench_latency.py</code> reproduc
 anywhere.</p>
 <table>
 <tr><th>Stage</th><th>Budget</th><th>Measured</th></tr>
-<tr><td>Single-trajectory kernel</td><td>≤ 15 ms</td><td>1.0 to 1.6 ms median</td></tr>
-<tr><td>100-seed ensemble, kernel only</td><td rowspan="2">≤ 120 ms</td><td>12 to 24 ms on 16 threads</td></tr>
-<tr><td>100-seed ensemble incl. 4.32 M draws and percentiles</td><td>51 to 71 ms median</td></tr>
-<tr><td>Parameter change to refreshed plots, cards and table</td><td>&lt; 50 ms</td><td>10 to 18 ms median</td></tr>
-<tr><td>Chart frame while panning, zooming or moving the crosshair</td><td>16.7 ms (60 FPS)</td><td>16 to 25 ms median, 18 to 31 ms at the 95th percentile: <strong>not met</strong> on this machine</td></tr>
+<tr><td>Single-trajectory kernel</td><td>≤ 15 ms</td><td>1.1 to 1.7 ms median</td></tr>
+<tr><td>100-seed ensemble, kernel only</td><td rowspan="2">≤ 120 ms</td><td>11 to 23 ms on 16 threads</td></tr>
+<tr><td>100-seed ensemble incl. 4.32 M draws and percentiles</td><td>47 to 73 ms median</td></tr>
+<tr><td>Parameter change to refreshed plots, cards and table</td><td>&lt; 50 ms</td><td>7 to 12 ms median</td></tr>
+<tr><td>Chart frame while panning, zooming or moving the crosshair</td><td>16.7 ms (60 FPS) at the 95th percentile</td><td>9 to 11 ms median, 13 to 15.5 ms at the 95th percentile for the slowest case</td></tr>
 </table>
-<p>The last row is measured by <code>benchmarks/bench_fps.py</code> on a real display. A frame
-costs 4 to 16 ms to paint; the rest is event handling and presentation through WSLg.
-The cost does not grow with the length of the back-test.</p>
+<p>The last row is measured by <code>benchmarks/bench_fps.py</code> on a real display, for a
+30-day and a 365-day back-test. A frame costs 1.2 to 3.6 ms to paint; the rest is event
+handling and presentation. An empty OpenGL widget of the same size already needs 5.3 to
+7.6 ms at the median and 7.3 to 10.1 ms at the 95th percentile on this machine, because
+WSLg copies every frame back from the GPU, and the benchmark reports that floor next to
+its results. Inside the complete 1920x1040 window the floor is higher, and on X11 the
+slowest case is at the 16.7 ms limit there. The cost does not grow with the length of the
+back-test.</p>
 
 <h3>Chart renderer</h3>
 <p><code>ui/chart_workspace.py</code> builds one <code>pyqtgraph.GraphicsLayoutWidget</code>
-with three plots at stretch 55 : 25 : 20 whose x axes are linked. Lines, steps and bands
-are <code>GLLayerItem</code> objects (<code>ui/chart_gl.py</code>). Each keeps its
-full-resolution arrays and, for the range in view, reduces them to at most two points per
-pixel - a min/max decimation for prices and holdings, a bucket mean for the fast
-oscillating signals and envelope edges - then tessellates the result into triangles in
-screen space and draws them with a small shader that smooths the edges and cuts dashes.
-Line weight and dashing therefore do not depend on the driver's line-width support, and
-the cost of a frame depends on the canvas width, not on the length of the back-test.
-Without an OpenGL viewport the same geometry is drawn with <code>QPainter</code>.</p>
+with three plots at stretch 55 : 25 : 20 whose x axes are linked. pyqtgraph provides the
+layout, the view ranges and the mouse interaction; it paints nothing. The workspace
+assembles two display lists for <code>ui/chart_gl.py</code>: the <em>scene</em> (grid,
+layers, markers, liquidation flashes, axes and tick labels) and the <em>overlay</em>
+(crosshair, liquidation badges, read-outs). Both are drawn in a single pass on the OpenGL
+viewport. Moving the crosshair rebuilds only the overlay and replays the scene from
+buffers that are already on the GPU.</p>
+<p>Every layer keeps its full-resolution series together with a pyramid of block minima,
+maxima and sums (<code>ui/chart_geometry.py</code>). For the range in view it is reduced to
+at most two points per pixel - a min/max reduction for prices and holdings, a bucket mean
+for the fast oscillating signals and envelope edges - and tessellated into triangles in
+screen space, which a small shader anti-aliases and cuts into dashes. Text and markers are
+rasterised once into a sprite atlas and drawn as textured quads. Line weight and dashing
+therefore do not depend on the driver's line-width support, and the cost of a frame
+depends on the canvas width, not on the length of the back-test. Without an OpenGL
+viewport the same display lists are drawn with <code>QPainter</code>.</p>
 
 <h3>Ledger</h3>
 <p><code>TelemetryTableModel</code> (<code>ui/ledger_window.py</code>) is a
@@ -555,9 +567,14 @@ currently shown, in display order, as CSV or Parquet.</p>
 <p>The ledger and this documentation viewer are <code>CDockWidget</code> instances of the Qt
 Advanced Docking System. The first time one is opened it floats, and its container gets
 the flags <code>Tool | WindowStaysOnTopHint | WindowMinimizeButtonHint |
-WindowMaximizeButtonHint</code>, so it stays above the main window. Dragging its title bar
-over the main window shows the drop compass; the menu next to each toolbar button performs
-the same docking without a drag.</p>
+WindowMaximizeButtonHint</code>, so it stays above the main window. Where an X11 window
+manager does not show utility windows, the container is an ordinary window owned by the
+main window instead of a <code>Tool</code> window. Dragging its title bar over the main
+window shows the drop compass, and dropping on the left, right or bottom indicator docks
+it there; the menu next to each toolbar button performs the same docking without a drag.
+On Linux the drag needs the X11 platform, which the application selects when it is usable
+(see the README); there the floating windows have the application's own title bar and
+resize grips along their edges.</p>
 
 <h3>Popovers</h3>
 <p><code>RichPopoverManager</code> (<code>ui/popover_manager.py</code>) owns three precise
