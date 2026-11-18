@@ -12,6 +12,10 @@
   var focused = null;
   var previewCollapsed = false;
   var ticking = false;
+  // Section the view was last sent to (by a link, the URL fragment or the host).
+  // While the reader has not scrolled away, it is re-applied whenever the
+  // viewport changes size, because reflowed text moves every anchor.
+  var anchored = null;
 
   function allSections() {
     return Array.prototype.slice.call(document.querySelectorAll("section[data-concept-id]"));
@@ -23,18 +27,21 @@
     });
   }
 
-  function focusSection(id) {
+  function focusSection(id, mark) {
     var target = document.querySelector('section[data-concept-id="' + id + '"]');
     if (!target) { return false; }
-    allSections().forEach(function (s) { s.classList.toggle("synced", s === target); });
+    if (mark !== false) {
+      allSections().forEach(function (s) { s.classList.toggle("synced", s === target); });
+    }
     var top = target.getBoundingClientRect().top + window.scrollY - 10;
     window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+    anchored = id;
     markToc(id);
     return true;
   }
 
   function readingSection() {
-    var line = window.innerHeight * 0.3;
+    var line = Math.max(window.innerHeight * 0.3, 60);
     var best = null;
     allSections().forEach(function (s) {
       var rect = s.getBoundingClientRect();
@@ -98,6 +105,7 @@
     volume: volume,
     focusSection: focusSection,
     currentSection: function () { return focused; },
+    previewCollapsed: function () { return previewCollapsed; },
     sectionIds: function () {
       return allSections().map(function (s) { return s.getAttribute("data-concept-id"); });
     }
@@ -116,6 +124,11 @@
     }
     document.documentElement.setAttribute("data-math", "rendered");
 
+    // Rendering the mathematics changes the height of everything above the
+    // anchor, so the browser's own jump to location.hash is stale by now.
+    var initial = decodeURIComponent(window.location.hash.replace(/^#/, ""));
+    if (initial) { focusSection(initial, false); focused = initial; }
+
     if ("IntersectionObserver" in window) {
       var observer = new IntersectionObserver(schedule, {
         rootMargin: "0px 0px -70% 0px",
@@ -124,7 +137,24 @@
       allSections().forEach(function (s) { observer.observe(s); });
     }
     window.addEventListener("scroll", schedule, { passive: true });
-    window.addEventListener("resize", schedule);
+    window.addEventListener("resize", function () {
+      if (anchored) {
+        var target = document.querySelector('section[data-concept-id="' + anchored + '"]');
+        if (target) {
+          var top = target.getBoundingClientRect().top + window.scrollY - 10;
+          window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+        }
+      }
+      schedule();
+    });
+    // Any deliberate scrolling by the reader releases the anchor.
+    ["wheel", "touchmove", "keydown", "mousedown"].forEach(function (name) {
+      window.addEventListener(name, function () { anchored = null; }, { passive: true });
+    });
+    window.addEventListener("hashchange", function () {
+      var id = decodeURIComponent(window.location.hash.replace(/^#/, ""));
+      if (id) { anchored = id; }
+    });
 
     document.addEventListener("mouseover", function (event) {
       var anchor = linkFrom(event);

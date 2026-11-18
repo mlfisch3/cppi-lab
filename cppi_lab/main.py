@@ -159,6 +159,9 @@ def main(argv: list[str] | None = None) -> int:
 
     from cppi_lab.ui.doc_workbench import release_profile
 
+    # Web pages must be gone before the profile they belong to.
+    QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.Type.DeferredDelete)
+    app.processEvents()
     release_profile()
     return code
 

@@ -7,7 +7,7 @@ before any Qt module is imported, so the whole suite runs without a display.
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import replace
 from datetime import UTC, datetime
 
@@ -35,6 +35,25 @@ def pytest_configure(config: pytest.Config) -> None:
     import pyqtgraph as pg
 
     pg.setConfigOptions(useOpenGL=False, antialias=True)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _release_web_profile() -> Iterator[None]:
+    """Delete every web page before the shared QtWebEngine profile goes away."""
+    yield
+    from PySide6 import QtCore, QtWidgets
+
+    from cppi_lab.ui.doc_workbench import release_profile
+
+    app = QtWidgets.QApplication.instance()
+    if app is not None:
+        for _ in range(3):
+            QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.Type.DeferredDelete)
+            app.processEvents()
+    release_profile()
+    if app is not None:
+        QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.Type.DeferredDelete)
+        app.processEvents()
 
 
 def ms(year: int, month: int, day: int, hour: int = 0, minute: int = 0) -> int:

@@ -5,7 +5,7 @@
   --theory: #A78BFA; --tech: #34D399;
 }
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; scroll-padding-top: 14px; }
+html { scroll-padding-top: 14px; }
 body {
   margin: 0; background: var(--canvas); color: var(--text);
   font: 14px/1.65 Inter, "Segoe UI", "SF Pro Text", "DejaVu Sans", "Helvetica Neue", Arial, sans-serif;

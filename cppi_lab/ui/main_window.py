@@ -504,10 +504,22 @@ class MainWindow(QtWidgets.QMainWindow):
             dock.toggleView(True)
         if not dock.isFloating():
             dock.setFloating()
+        self._finish_floating(dock)
+        # The docking system and the window manager both finish their part of the
+        # float asynchronously; settle flags, visibility and placement after them.
+        QtCore.QTimer.singleShot(0, partial(self._finish_floating, dock))
+        QtCore.QTimer.singleShot(80, partial(self._finish_floating, dock))
+
+    def _finish_floating(self, dock: ads.CDockWidget) -> None:
+        if not dock.isFloating() or dock.isClosed():
+            return
         self._apply_floating_flags(dock)
+        container = dock.floatingDockContainer()
+        if container is None:
+            return
+        if not container.isVisible():
+            container.show()
         self._place_floating(dock)
-        # A window manager may reposition the window when it maps it; place it once more.
-        QtCore.QTimer.singleShot(80, partial(self._place_floating, dock))
 
     def _place_floating(self, dock: ads.CDockWidget) -> None:
         """Size a floating window and put it over the right part of the main window."""

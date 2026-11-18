@@ -63,7 +63,10 @@ class DocPage(QWebEnginePage):
         self, url: QtCore.QUrl | str, kind: QWebEnginePage.NavigationType, is_main_frame: bool
     ) -> bool:
         target = QtCore.QUrl(url)
-        return target.scheme() == SCHEME and parse_doc_url(target) is not None
+        accepted = target.scheme() == SCHEME and parse_doc_url(target) is not None
+        if accepted and kind != QWebEnginePage.NavigationType.NavigationTypeTyped:
+            self.userNavigation.emit()  # a link, Back or Forward - not a setUrl() call
+        return accepted
 
     def javaScriptConsoleMessage(
         self,
@@ -76,6 +79,7 @@ class DocPage(QWebEnginePage):
             self.consoleError.emit(f"{source}:{line}: {message}")
 
     consoleError = QtCore.Signal(str)
+    userNavigation = QtCore.Signal()
 
 
 class DocSyncBridge(QtCore.QObject):
@@ -144,6 +148,8 @@ class DocWorkbench(QtWidgets.QWidget):
         self._preview_loaded_volume = ""
         self._preview_ready = False
         self._pending_preview: str | None = None
+        #: Target of the last ``open_at`` that has not been confirmed by the view yet.
+        self._wanted: tuple[str, str] | None = None
         profile = shared_profile(registry)
 
         self.primary_view = QWebEngineView(self)
@@ -164,6 +170,7 @@ class DocWorkbench(QtWidgets.QWidget):
         self.bridge.sectionFocused.connect(self._on_section_focused)
         self.bridge.linkHovered.connect(self._on_link_hovered)
         self.bridge.linkLeft.connect(self._on_link_left)
+        self.primary_page.userNavigation.connect(self._forget_wanted)
 
         self.splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal, self)
         self.splitter.addWidget(self.primary_view)
@@ -257,7 +264,19 @@ class DocWorkbench(QtWidgets.QWidget):
             raise ValueError(f"unknown volume {volume!r}")
         if anchor:
             self._focused = anchor
+        self._wanted = (volume, anchor)
         self.primary_view.setUrl(doc_url(volume, anchor))
+
+    def _forget_wanted(self) -> None:
+        self._wanted = None
+
+    def _reached(self, target: tuple[str, str]) -> bool:
+        current = parse_doc_url(self.primary_view.url())
+        return (
+            current is not None
+            and current[0] == target[0]
+            and (not target[1] or current[1] == target[1])
+        )
 
     def switch_volume(self) -> None:
         """Swap primary and counterpart, staying on the same concept."""
@@ -280,6 +299,15 @@ class DocWorkbench(QtWidgets.QWidget):
 
     def _on_primary_loaded(self, ok: bool) -> None:
         self._refresh_toolbar()
+        wanted = self._wanted
+        if wanted is not None:
+            if self._reached(wanted):
+                self._wanted = None
+            else:
+                # A load that was already in flight (typically the very first
+                # page) finished after the request and replaced it: ask again.
+                self.primary_view.setUrl(doc_url(*wanted))
+                return
         if ok:
             self.primaryLoaded.emit(self._volume)
 
@@ -315,6 +343,8 @@ class DocWorkbench(QtWidgets.QWidget):
         if self._registry.concept(concept_id) is None:
             return
         self._focused = concept_id
+        if self._wanted == (self._volume, concept_id):
+            self._wanted = None  # the page confirms it arrived (same-document jump)
         self.sectionFocused.emit(concept_id)
         if not self._peeking:
             self._sync_preview(concept_id)
