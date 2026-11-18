@@ -112,22 +112,25 @@ uv run python benchmarks/bench_latency.py      # headless
 uv run python benchmarks/bench_fps.py          # needs a display and OpenGL
 ```
 
-Measured on the development machine (Intel i9-12900H, 16 logical CPUs, NVIDIA RTX 3080 Ti Laptop, Linux under WSL2 with WSLg) for a 43,200-bar window; the ranges cover the scenarios of the benchmark and several runs:
+Measured on the development machine (Intel i9-12900H, 16 logical CPUs, NVIDIA RTX 3080 Ti Laptop, Linux under WSL2 with WSLg) for a 43,200-bar window.
+The ranges cover the scenarios of each benchmark and the runs made during development, during which the machine was not idle: other long-running processes used about one CPU core and part of the GPU.
 
 | PRD budget | Requirement | Measured | Result |
 | :--- | :--- | :--- | :--- |
-| Single-trajectory kernel | ≤ 15 ms | 1.1 to 1.7 ms median; slowest single run 4.6 ms | met |
-| 100-seed Monte Carlo ensemble | ≤ 120 ms | 11 to 23 ms kernel only; 47 to 73 ms median including the 4.32 million draws and the percentiles; slowest single run 95 ms | met |
-| Parameter change to refreshed plots, cards and table | < 50 ms | 7 to 12 ms median; slowest single run 18 ms | met |
-| Chart pan, zoom and crosshair | 60 FPS (16.7 ms) at the 95th percentile | worst 95th-percentile frame 12.9 to 13.6 ms on Wayland and 14.0 to 15.5 ms on X11 | met |
+| Single-trajectory kernel | ≤ 15 ms | 1.0 to 1.7 ms median; single runs up to 5 ms | met |
+| 100-seed Monte Carlo ensemble | ≤ 120 ms | 10 to 24 ms kernel only; 47 to 73 ms median including the 4.32 million draws and the percentiles; single runs up to 95 ms | met |
+| Parameter change to refreshed plots, cards and table | < 50 ms | 7 to 13 ms median; single runs up to 18 ms | met |
+| Chart pan, zoom and crosshair | 60 FPS (16.7 ms) at the 95th percentile | worst 95th-percentile frame about 13 to 14 ms on Wayland and 14 to 16.5 ms on X11 | met, narrowly on X11 |
 
 The frame-rate benchmark replays panning, zooming and a crosshair sweep on the canvas at the size it has in a 1920x1080 window, for a 30-day and a 365-day back-test, with vertical sync off.
 It judges each case by the 95th percentile of the time from requesting a change to the end of the event-loop pass that presented it.
 It also reports two figures for context, which are not part of its verdict: the *presentation floor*, an empty OpenGL widget that only clears itself, and the same interactions inside the complete 1920x1040 window.
 The floor is 5.3 to 7.6 ms at the median and 7.3 to 10.1 ms at the 95th percentile on this machine, because WSLg copies every frame back from the GPU; the chart itself adds 1.2 to 3.6 ms of painting.
-In the complete window the worst 95th-percentile frame was 14.3 to 14.6 ms on Wayland.
-On X11, where an empty window of that size alone needs 9.5 to 10.6 ms at the 95th percentile, it was 15.2 to 17.2 ms over five runs: four within the budget and one above it.
-The full window on X11 is therefore at the limit on this machine, not comfortably inside it.
+On Wayland the benchmark is met with about 3 ms to spare.
+On X11, where every frame also passes through XWayland, it was met in every run, but the slowest case varied between 14.0 and 16.5 ms from run to run, so the margin can be as small as 0.2 ms.
+In the complete window the worst 95th-percentile frame was 14.3 to 15.1 ms on Wayland.
+On X11, where an empty window of that size alone needs 9.5 to 10.6 ms at the 95th percentile, it was 15.1 to 17.2 ms over six runs: five within the budget and one above it.
+On X11 this machine is therefore at the limit, not comfortably inside it.
 The figures may differ on a native Linux, Windows or macOS session; they were not measured there.
 See [`docs/DECISIONS.md`](docs/DECISIONS.md), decisions 25 to 27, for how the chart is drawn and what was measured.
 

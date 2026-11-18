@@ -216,8 +216,9 @@ Marker sizes shrink when more than 250 are in view.
 ### 27. Chart frame rate: 60 FPS at the 95th percentile
 
 **Requirement:** PRD section 6.1, "OpenGL chart pan/zoom and crosshair inspection must maintain 60 FPS", read as a 95th-percentile frame time of at most 16.7 ms.
-**Measured** (`benchmarks/bench_fps.py`, 1450x940 canvas, WSLg, NVIDIA RTX 3080 Ti through the D3D12 driver, vertical sync off): the worst 95th-percentile frame over all pan, zoom and crosshair cases of the 30-day and the 365-day back-test was 12.9 to 13.6 ms on Wayland and 14.0 to 15.5 ms on X11 across the runs made with the final renderer.
-Every run met the budget.
+**Measured** (`benchmarks/bench_fps.py`, 1450x940 canvas, WSLg, NVIDIA RTX 3080 Ti through the D3D12 driver, vertical sync off): the worst 95th-percentile frame over all pan, zoom and crosshair cases of the 30-day and the 365-day back-test was 12.9 to 13.6 ms on Wayland and 14.0 to 16.5 ms on X11 across the runs made with the final renderer.
+Every run met the budget: with about 3 ms to spare on Wayland, and on X11 with between 0.2 and 2.7 ms to spare.
+The machine was not idle during these measurements; other long-running processes used about one CPU core and part of the GPU, which is one source of the spread.
 The first version measured 18 to 31 ms.
 **The floor.**
 An empty OpenGL widget of the same size that only clears itself takes 5.3 to 7.6 ms at the median and 7.3 to 10.1 ms at the 95th percentile on this machine, because WSLg has no zero-copy path and reads every frame back from the GPU.
@@ -231,9 +232,10 @@ The single-pass renderer of decision 25 removed the per-item overhead, the pyram
 Crosshair and read-out updates are decoupled from the scene: moving the crosshair rebuilds only the overlay list (a few hundred bytes) and replays buffers that are already on the GPU, with no decimation, tessellation or widget layout.
 **In the full window.**
 The benchmark also reports the same interactions inside the complete 1920x1040 application window, as context and not as part of its verdict, which is taken on the canvas as in the first version.
-There the worst 95th-percentile frame was 14.3, 14.3 and 14.6 ms on Wayland (three runs) and 15.2, 15.9, 16.1, 16.4 and 17.2 ms on X11 (five runs): four within the budget and one above it.
-The larger window raises the floor: an empty OpenGL widget of that size needs 8.8 to 8.9 ms at the 95th percentile on Wayland and 9.5 to 10.6 ms on X11, where every frame passes through XWayland as well.
-The full window on X11 is therefore at the limit on this machine rather than inside it, and the remaining 4 ms of application work per frame is spread thinly, as the profile above shows.
+There the worst 95th-percentile frame was 14.3, 14.3, 14.6 and 15.1 ms on Wayland (four runs) and 15.1, 15.2, 15.9, 16.1, 16.4 and 17.2 ms on X11 (six runs): five within the budget and one above it.
+The larger window raises the floor: an empty OpenGL widget of that size needs 8.8 to 9.8 ms at the 95th percentile on Wayland and 9.5 to 10.6 ms on X11, where every frame passes through XWayland as well.
+On X11 this machine is therefore at the limit rather than comfortably inside it, and the remaining 4 ms of application work per frame is spread thinly, as the profile above shows.
+One further candidate was measured and rejected: keeping Qt from visiting the 55 pyqtgraph items that paint nothing changed the frame time by less than the measurement noise of 0.5 ms.
 X11 is nevertheless the platform the application prefers on Linux, because drag-and-drop docking does not work on Wayland (decision 31).
 The figures may differ on a native Linux, Windows or macOS session; they were not measured there.
 

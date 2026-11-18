@@ -25,7 +25,7 @@ Status values: **met**, **met with note** (met, with a clarification or resolved
 | Windows 11 and macOS, named as target platforms, were not run or tested. | PRD header |
 | The kernels are compiled without `fastmath`, contrary to the decorator shown in the TSD. | TSD 1.1, D-6 |
 | With the specified defaults the default window contains no orders; this is correct behaviour and is explained in the UI. | FR-2.1, D-20 |
-| The frame-rate benchmark is met on both display back ends. Inside the complete 1920x1040 window, which the benchmark reports as context, the worst 95th-percentile frame on X11 is at the limit on this machine: 15.2 to 17.2 ms over five runs, one of them above 16.7 ms; an empty window of that size alone needs 9.5 to 10.6 ms there. On Wayland it is 14.3 to 14.6 ms. | PRD 6.1, D-27 |
+| The frame-rate benchmark is met on both display back ends, on X11 narrowly: its slowest case varied between 14.0 and 16.5 ms from run to run against a budget of 16.7 ms. Inside the complete 1920x1040 window, which the benchmark reports as context, the worst 95th-percentile frame on X11 was 15.1 to 17.2 ms over six runs, one of them above the budget; an empty window of that size alone needs 9.5 to 10.6 ms there. On Wayland the figures are 12.9 to 13.6 ms and 14.3 to 15.1 ms. | PRD 6.1, D-27 |
 
 ## PRD section 3: strategy and invariants
 
@@ -49,7 +49,7 @@ Status values: **met**, **met with note** (met, with a clarification or resolved
 | FR-1.3 `Normalize Start Price to Reference Anchor` | `MarketWindow.rescaled`; controller; sidebar row with anchor price; amber chip in the top bar | test: `test_rescaling_preserves_returns_and_volumes`, `test_normalisation_anchors_the_first_open`, `test_anchor_price_edit`; display: screenshot 03 | met with note: default off (D-17) |
 | FR-2.1 Default initialisation | `config/defaults.py` | test: `test_defaults.py` (every row of section 5), `test_launches_with_prd_defaults_in_every_control` | met |
 | FR-2.2 Slider and spin box in sync, per-row reset, global reset | `ui/control_sidebar.py` `ParamRow`, `ControlSidebar` | test: `test_every_numeric_row_has_slider_spin_reset_and_badge`, `test_spin_edit_recalculates_and_moves_the_slider`, `test_slider_edit_recalculates_and_moves_the_spin_box`, `test_reset_one_row`, `test_reset_all`, `test_start_time_edit_and_reset`, `test_values_are_clamped_to_the_prd_range`, `test_p_ref_follows_p_liq` | met with note: the two toggles (Monte Carlo fan, normalisation) are switches, not sliders |
-| FR-2.3 Re-run 43,200 bars and refresh plots and tables in under 50 ms | `engine/controller.py` (staged caches); `MainWindow.recalculate` | bench: 7 to 12 ms median, slowest single run 18 ms; test: `test_recalculation_refreshes_kpis_chart_and_ledger`, `test_burst_of_edits_is_coalesced_into_one_run`, `test_stage_caches_are_reused_only_when_valid` | met with note: the figure covers the back-test and the update of every view's data; painting the next frame costs a further 2 to 4 ms |
+| FR-2.3 Re-run 43,200 bars and refresh plots and tables in under 50 ms | `engine/controller.py` (staged caches); `MainWindow.recalculate` | bench: 7 to 13 ms median, single runs up to 18 ms; test: `test_recalculation_refreshes_kpis_chart_and_ledger`, `test_burst_of_edits_is_coalesced_into_one_run`, `test_stage_caches_are_reused_only_when_valid` | met with note: the figure covers the back-test and the update of every view's data; painting the next frame costs a further 2 to 4 ms |
 | FR-3.1 Maker fee, taker fee, slippage buffer | parameters `f_maker`, `f_taker`, `delta_slip` | test: `test_defaults.py`, `test_uniform_draw_decides_fill_or_miss`, `test_row_identities` | met |
 | FR-3.2 Stochastic maker fill model, seeded uniform draw, fill at limit with maker fee, missed orders logged | `fill_probability`, step 3 of `simulate_core`, `uniform_draws` | test: `test_fill_model.py`, `test_prng.py`, `test_kernel_reference.py` | met |
 | FR-3.3 Monte Carlo fan, 100 seeds in parallel, 5th to 95th percentile band behind the active trajectory | `engine/monte_carlo.py`; `MainWindow._request_ensemble`; `ChartWorkspace.set_ensemble` | test: `test_monte_carlo.py`, `test_monte_carlo_fan_toggle`, `test_monte_carlo_fan_runs_on_a_worker_thread`, `test_monte_carlo_fan_layer`; display: screenshot 03 | met |
@@ -95,9 +95,9 @@ Every row is defined once in `cppi_lab/config/defaults.py` (`PARAM_SPECS`) and v
 
 | Requirement | Implementation | Verification | Status |
 | :--- | :--- | :--- | :--- |
-| 6.1 Single trajectory, 43,200 bars, <= 15 ms on one core | `simulate_core` | bench: 1.1 to 1.7 ms median, slowest single run 4.6 ms | met |
-| 6.1 100-seed ensemble <= 120 ms with `@njit(parallel=True)` | `ensemble_core`, `percentile_band` | bench: 11 to 23 ms kernel only; 47 to 73 ms median including the draws and percentiles; slowest single run 95 ms | met |
-| 6.1 Pan, zoom and crosshair at 60 FPS | `ui/chart_gl.py`, `ui/chart_geometry.py`, `ui/chart_workspace.py` | bench: worst 95th-percentile frame 12.9 to 13.6 ms (Wayland) and 14.0 to 15.5 ms (X11) over pan, zoom and crosshair for a 30-day and a 365-day back-test; paint 1.2 to 3.6 ms; empty-scene floor 7.3 to 10.1 ms at the 95th percentile | met with note: inside the complete window on X11 the figure is at the limit, 15.2 to 17.2 ms over five runs (D-27) |
+| 6.1 Single trajectory, 43,200 bars, <= 15 ms on one core | `simulate_core` | bench: 1.0 to 1.7 ms median, single runs up to 5 ms | met |
+| 6.1 100-seed ensemble <= 120 ms with `@njit(parallel=True)` | `ensemble_core`, `percentile_band` | bench: 10 to 24 ms kernel only; 47 to 73 ms median including the draws and percentiles; single runs up to 95 ms | met |
+| 6.1 Pan, zoom and crosshair at 60 FPS | `ui/chart_gl.py`, `ui/chart_geometry.py`, `ui/chart_workspace.py` | bench: worst 95th-percentile frame 12.9 to 13.6 ms (Wayland) and 14.0 to 16.5 ms (X11) over pan, zoom and crosshair for a 30-day and a 365-day back-test, met in every run; paint 1.2 to 3.6 ms; empty-scene floor 7.3 to 10.1 ms at the 95th percentile | met with note: narrowly on X11, and inside the complete window on X11 the figure is at the limit, 15.1 to 17.2 ms over six runs (D-27) |
 | 6.2 IEEE-754 `float64` accounting with conservation assertions `V_t >= F - 1e-6` | kernel compiled without `fastmath`; breach counter in the loop; Floor Integrity card | test: `test_kernel_reference.py` (bit-identical to the reference), `test_floor_invariant.py`, `test_accounting.py` | met |
 | 6.3 Dark theme `#0B0F19`, `#111827`, `#1E293B` | `ui/theme.py` | test: `test_visual_encoding_matches_the_tsd_matrix`; display: all screenshots | met |
 
@@ -137,4 +137,4 @@ Every row is defined once in `cppi_lab/config/defaults.py` (`PARAM_SPECS`) and v
 | Real application, every state | `uv run python scripts/ui_tour.py OUT` | 22 screenshots, inspected |
 | Real mouse: move, resize, dock | `uv run python scripts/drag_dock_tour.py OUT` | 66 checks passed, three runs in a row |
 | Latency budgets | `uv run python benchmarks/bench_latency.py` | all met |
-| Frame rate | `uv run python benchmarks/bench_fps.py` | met on Wayland and on X11 in every run; full-window context figure at the limit on X11 (D-27) |
+| Frame rate | `uv run python benchmarks/bench_fps.py` | met on Wayland and on X11 in every run, narrowly on X11; full-window context figure at the limit on X11 (D-27) |

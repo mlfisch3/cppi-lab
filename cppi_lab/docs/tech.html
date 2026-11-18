@@ -520,20 +520,21 @@ WSL2) for a 43,200-bar window; <code>benchmarks/bench_latency.py</code> reproduc
 anywhere.</p>
 <table>
 <tr><th>Stage</th><th>Budget</th><th>Measured</th></tr>
-<tr><td>Single-trajectory kernel</td><td>≤ 15 ms</td><td>1.1 to 1.7 ms median</td></tr>
-<tr><td>100-seed ensemble, kernel only</td><td rowspan="2">≤ 120 ms</td><td>11 to 23 ms on 16 threads</td></tr>
+<tr><td>Single-trajectory kernel</td><td>≤ 15 ms</td><td>1.0 to 1.7 ms median</td></tr>
+<tr><td>100-seed ensemble, kernel only</td><td rowspan="2">≤ 120 ms</td><td>10 to 24 ms on 16 threads</td></tr>
 <tr><td>100-seed ensemble incl. 4.32 M draws and percentiles</td><td>47 to 73 ms median</td></tr>
-<tr><td>Parameter change to refreshed plots, cards and table</td><td>&lt; 50 ms</td><td>7 to 12 ms median</td></tr>
-<tr><td>Chart frame while panning, zooming or moving the crosshair</td><td>16.7 ms (60 FPS) at the 95th percentile</td><td>9 to 11 ms median, 13 to 15.5 ms at the 95th percentile for the slowest case</td></tr>
+<tr><td>Parameter change to refreshed plots, cards and table</td><td>&lt; 50 ms</td><td>7 to 13 ms median</td></tr>
+<tr><td>Chart frame while panning, zooming or moving the crosshair</td><td>16.7 ms (60 FPS) at the 95th percentile</td><td>9 to 11 ms median, 13 to 16.5 ms at the 95th percentile for the slowest case</td></tr>
 </table>
 <p>The last row is measured by <code>benchmarks/bench_fps.py</code> on a real display, for a
 30-day and a 365-day back-test. A frame costs 1.2 to 3.6 ms to paint; the rest is event
 handling and presentation. An empty OpenGL widget of the same size already needs 5.3 to
 7.6 ms at the median and 7.3 to 10.1 ms at the 95th percentile on this machine, because
 WSLg copies every frame back from the GPU, and the benchmark reports that floor next to
-its results. Inside the complete 1920x1040 window the floor is higher, and on X11 the
-slowest case is at the 16.7 ms limit there. The cost does not grow with the length of the
-back-test.</p>
+its results. On Wayland the budget is met with about 3 ms to spare; on X11, where every
+frame also passes through XWayland, it is met narrowly, and inside the complete 1920x1040
+window the slowest case is at the 16.7 ms limit there. The cost does not grow with the
+length of the back-test.</p>
 
 <h3>Chart renderer</h3>
 <p><code>ui/chart_workspace.py</code> builds one <code>pyqtgraph.GraphicsLayoutWidget</code>
