@@ -431,3 +431,28 @@ def test_pages_never_scroll_sideways(qtbot: QtBot, workbench: DocWorkbench, volu
         ".map(function (t) { return t.scrollWidth - t.clientWidth; }))",
     )
     assert widest >= 0
+
+
+def test_toolbar_keeps_whole_words_in_a_narrow_docked_panel(
+    qtbot: QtBot, workbench: DocWorkbench
+) -> None:
+    label = workbench.volume_label
+    assert label.text() == "Technical Implementation Documentation" or label.text() == (
+        "Theoretical Strategy Documentation"
+    )
+    assert not workbench.search_status.isVisible()  # no room is reserved for an idle counter
+    workbench.resize(480, 800)  # the width of a panel docked beside the workbench
+    qtbot.wait(100)
+    assert label.text() in ("Technical", "Theory")  # the short name, not a cut-off title
+    assert not label.is_elided()
+    assert label.toolTip().endswith("Documentation")
+    for button in (workbench.back_button, workbench.switch_button, workbench.preview_button):
+        assert button.geometry().right() <= workbench.toolbar.width()
+    workbench.search_edit.setText("trigger")
+    qtbot.waitUntil(lambda: "/" in workbench.search_status.text(), timeout=WAIT)
+    assert workbench.search_status.isVisible()
+    workbench.search_edit.clear()
+    qtbot.waitUntil(lambda: not workbench.search_status.isVisible(), timeout=WAIT)
+    workbench.resize(1300, 800)
+    qtbot.wait(100)
+    assert label.text().endswith("Documentation")

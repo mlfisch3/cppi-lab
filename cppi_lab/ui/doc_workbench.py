@@ -31,7 +31,7 @@ from cppi_lab.ui.doc_scheme import (
     install_handler,
     parse_doc_url,
 )
-from cppi_lab.ui.widgets import ElidedLabel
+from cppi_lab.ui.widgets import AdaptiveLabel
 
 PRIMARY_SHARE = 65
 PREVIEW_SHARE = 35
@@ -217,7 +217,8 @@ class DocWorkbench(QtWidgets.QWidget):
         self.switch_button.setToolTip("Switch Primary Volume (Theory ⇄ Technical)")
         self.switch_button.setAccessibleName("Switch Primary Volume")
         self.switch_button.clicked.connect(self.switch_volume)
-        self.volume_label = ElidedLabel("", self.toolbar)
+        # The full title of the volume, or just its short name in a narrow panel.
+        self.volume_label = AdaptiveLabel(self.toolbar)
         self.volume_label.setObjectName("paneTitle")
         self.search_edit = QtWidgets.QLineEdit(self.toolbar)
         self.search_edit.setPlaceholderText("Search…")
@@ -228,9 +229,10 @@ class DocWorkbench(QtWidgets.QWidget):
         self.search_edit.setAccessibleName("Search")
         self.search_edit.textChanged.connect(lambda text: self.find_text(text))
         self.search_edit.returnPressed.connect(lambda: self.find_text(self.search_edit.text()))
+        # The match counter takes room only while a search is running.
         self.search_status = QtWidgets.QLabel("", self.toolbar)
         self.search_status.setProperty("role", "muted")
-        self.search_status.setMinimumWidth(52)
+        self.search_status.hide()
         self.preview_button = QtWidgets.QPushButton("Counterpart", self.toolbar)
         self.preview_button.setCheckable(True)
         self.preview_button.setChecked(True)
@@ -254,8 +256,10 @@ class DocWorkbench(QtWidgets.QWidget):
         self.back_button.setEnabled(history.canGoBack())
         self.forward_button.setEnabled(history.canGoForward())
         other = counterpart(self._volume)
-        self.volume_label.setText(self._registry.volume_title(self._volume))
-        self.volume_label.setToolTip(self._registry.volume_title(self._volume))
+        self.volume_label.set_wordings(
+            self._registry.volume_title(self._volume),
+            "Technical" if self._volume == "tech" else "Theory",
+        )
         short = "Technical" if other == "tech" else "Theory"
         self.switch_button.setText(f"⇄ {short}")
 
@@ -409,17 +413,21 @@ class DocWorkbench(QtWidgets.QWidget):
             flags |= QWebEnginePage.FindFlag.FindBackward
         self.primary_page.findText(text, flags)
         if not text:
-            self.search_status.setText("")
+            self._set_search_status("")
+
+    def _set_search_status(self, text: str) -> None:
+        self.search_status.setText(text)
+        self.search_status.setVisible(bool(text))
 
     def _on_find_finished(self, result: object) -> None:
         total = result.numberOfMatches()  # type: ignore[attr-defined]
         active = result.activeMatch()  # type: ignore[attr-defined]
         if not self.search_edit.text():
-            self.search_status.setText("")
+            self._set_search_status("")
         elif total == 0:
-            self.search_status.setText("no match")
+            self._set_search_status("no match")
         else:
-            self.search_status.setText(f"{active} / {total}")
+            self._set_search_status(f"{active} / {total}")
 
     def shutdown(self) -> None:
         """Release the web pages before the shared profile goes away."""
