@@ -454,9 +454,9 @@ def test_ledger_row_drives_the_chart_and_back(qtbot: QtBot, window: MainWindow) 
     index = ledger.model.index(1_234, 3)
     ledger.table.setCurrentIndex(index)
     assert chart.selected_bar == 1_234
-    assert chart.select_lines[0].isVisible()
-    assert chart.select_lines[2].value() == pytest.approx(chart._x[1_234])
-    assert "2026-01-25 20:34" in chart.headers[0].readout.text()
+    assert chart.selected_time == pytest.approx(chart._x[1_234])
+    assert len(chart.frames()[1].find("crosshair-select")) == 3  # a line in every pane
+    assert "2026-01-25 20:34" in chart.readouts[0]
 
     chart.barSelected.emit(4_321)
     assert ledger.current_bar() == 4_321
